@@ -27,8 +27,8 @@ describe('Aksara', () => {
     expect(aksara.getAksara()).toBe("ꦲꦗꦶ ꦱꦏ");
   });
 
-  test('should be able to handle "th")', () => {
-    const aksara = new Aksara('tha');
+  test('should be able to handle "th and dh")', () => {
+    const aksara = new Aksara('tha dha');
     expect(aksara.getAksara()).toBe("ꦡ");
   });
 });

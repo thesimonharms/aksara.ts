@@ -1,3 +1,9 @@
+type Syllable = {
+    initial: string,
+    vowel: string,
+    final: string
+}
+
 class Aksara {
     hanacaraka: string;
 
@@ -129,18 +135,30 @@ class Aksara {
                 continue;
             }
 
-            if (char === 'n' && (nextChar === 'g' || nextChar === 'y')) {
+            if (char === 'n' && (nextChar === 'g' || nextChar === 'h' || nextChar === 'y')) {
                 // Handle "ng" and "ny"
-                char += nextChar;
-                i++;
+                if (this.isVowel(nextNextChar)) {
+                    char += nextChar + nextNextChar;
+                } else {
+                    char += nextChar;
+                }
+                i+= 2;
             } else if (char === 'd' && nextChar === 'h') {
                 // Handle "dh"
-                char += nextChar;
-                i++;
+                if (this.isVowel(nextNextChar)) {
+                    char += nextChar + nextNextChar;
+                } else {
+                    char += nextChar;
+                }
+                i+= 2;
             } else if (char === 't' && nextChar === 'h') {
                 // Handle "th"
-                char += nextChar;
-                i++;
+                if (this.isVowel(nextNextChar)) {
+                    char += nextChar + nextNextChar;
+                } else {
+                    char += nextChar;
+                }
+                i+= 2;
             }
 
             currentSyllable += char;
@@ -167,7 +185,61 @@ class Aksara {
         return syllables;
     }
 
+    divideSyllables(input: string): Syllable {
+        let syllable: Syllable = {
+            initial: '',
+            vowel: '',
+            final: ''
+        };
+
+        let i = 0;
+
+        while (i < input.length) {
+            let char = input[i];
+            let nextChar = input[i + 1];
+            if (this.isVowel(char)) {
+                syllable.vowel += char;
+            }
+            if (i === 0 && this.isConsonant(char)) {
+                if (this.isConsonant(nextChar) && nextChar !== 'h') {
+                    syllable.initial += char;
+                } else if (this.isConsonant(nextChar) && nextChar === 'h') {
+                    syllable.initial += char + nextChar;
+                    i++;
+                } else if (char === 'n' && this.isConsonant(nextChar) && (nextChar === 'g' || nextChar === 'y')) {
+                    syllable.initial += char + nextChar;
+                    i++;
+                }
+            } else if (this.isConsonant(char)) {
+                if (this.isConsonant(nextChar) && nextChar !== 'h') {
+                    syllable.final += char;
+                } else if (this.isConsonant(nextChar) && nextChar === 'h') {
+                    syllable.final += char + nextChar;
+                    i++;
+                } else if (char === 'n' && this.isConsonant(nextChar) && (nextChar === 'g' || nextChar === 'y')) {
+                    syllable.final += char + nextChar;
+                    i++;
+                }
+            }
+            i++;
+        }
+        return syllable;
+    }
+
     getAksara(): string {
+        this.separateSyllables(this.text).forEach((syllable) => {
+            let syllableObj = this.divideSyllables(syllable);
+            let aksara = '';
+            if (syllableObj.initial) {
+                
+            }
+            this.hanacaraka += aksara;
+        });
+
+        return this.hanacaraka;
+    }
+
+    /* getAksara(): string {
         this.separateSyllables(this.text).forEach((syllable) => {
             let aksara = '';
             let i = 0;
@@ -224,7 +296,7 @@ class Aksara {
         });
 
         return this.hanacaraka;
-    }
+    } */
 
 }
 
