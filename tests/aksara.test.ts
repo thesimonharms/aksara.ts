@@ -19,11 +19,16 @@ describe('Aksara', () => {
 
   test('should return the correct aksara', () => {
     const aksara = new Aksara('aji saka');
-    expect(aksara.getAksara()).toBe("ꦄꦗꦶꦱꦏ");
+    expect(aksara.getAksara()).toBe("ꦲꦗꦶꦱꦏ");
   });
 
   test('should return the correct aksara with spaces', () => {
     const aksara = new Aksara('aji saka', true);
-    expect(aksara.getAksara()).toBe("ꦄꦗꦶ ꦱꦏ");
+    expect(aksara.getAksara()).toBe("ꦲꦗꦶ ꦱꦏ");
+  });
+
+  test('should be able to handle "th")', () => {
+    const aksara = new Aksara('tha');
+    expect(aksara.getAksara()).toBe("ꦡ");
   });
 });

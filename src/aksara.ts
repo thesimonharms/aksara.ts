@@ -5,10 +5,28 @@ class Aksara {
 
     consonants: Set<string> = new Set(['h', 'n', 'c', 'r', 'k', 'd', 't', 's', 'w', 'l', 'p', 'j', 'y', 'm', 'g', 'b']);
 
-    latinToAksara: { [key: string]: string } = {
+    pangkon: string = '꧀';
+
+    consonantDiacritics: { [key: string]: string } = {
+        'ng': 'ꦁ',
+        'm': 'ꦀ',
+        'r': 'ꦂ',
+        'h': 'ꦃ'
+    };
+
+    vowelDiacritics: { [key: string]: string } = {
+        'a': '',
+        'i': 'ꦶ',
+        'u': 'ꦸ',
+        'e': 'ꦼ',
+        'é': 'ꦺ',
+        'o': 'ꦼ'
+    };
+
+    initialConsonantAksara: { [key: string]: string } = {
         'ng': 'ꦔ',
         'ny': 'ꦚ',
-        'th': 'ꦛ',
+        'th': 'ꦡ',
         'dh': 'ꦝ',
         'h': 'ꦲ',
         'n': 'ꦤ',
@@ -28,6 +46,47 @@ class Aksara {
         'b': 'ꦧ',
     };
 
+    wyanjanaAksara: { [key: string]: string } = {
+        'ng': '꧀ꦔ',
+        'ny': '꧀ꦚ',
+        'th': '꧀ꦛ',
+        'dh': '꧀ꦝ',
+        'h': '꧀ꦲ',
+        'n': '꧀ꦤ',
+        'c': '꧀ꦕ',
+        'r': '꧀ꦫ',
+        'k': '꧀ꦏ',
+        'd': '꧀ꦢ',
+        't': '꧀ꦠ',
+        's': '꧀ꦱ',
+        'w': '꧀ꦮ',
+        'l': '꧀ꦭ',
+        'p': '꧀ꦥ',
+        'j': '꧀ꦗ',
+        'y': '꧀ꦪ',
+        'm': '꧀ꦩ',
+        'g': '꧀ꦒ',
+        'b': '꧀ꦧ',
+    };
+
+    normalAksaraVowels: { [key: string]: string } = {
+        'a': 'ꦲ',
+        'i': 'ꦲꦶ',
+        'u': 'ꦲꦸ',
+        'e': 'ꦲꦺ',
+        'é': 'ꦲꦼ',
+        'o': 'ꦲꦺꦴ'
+    };
+
+    explicitAksaraVowels: { [key: string]: string } = {
+        'a': 'ꦄ',
+        'i': 'ꦆ',
+        'u': 'ꦈ',
+        'e': 'ꦌ',
+        'é': 'Words CAN NOT start with é',
+        'o': 'ꦎ'
+    }
+
     constructor(public readonly text: string, public readonly spaces: boolean = false) {
         this.text = text;
         this.hanacaraka = '';
@@ -46,118 +105,127 @@ class Aksara {
         return this.consonants.has(char);
     }
 
+    // Function to separate syllables in Latin-based Javanese
+    separateSyllables(input: string): string[] {
+        const syllables: string[] = [];
+        let currentSyllable = '';
+        let i = 0;
+
+        while (i < input.length) {
+            let char = input[i];
+            let nextChar = input[i + 1];
+            let nextNextChar = input[i + 2];
+
+            if (char === ' ') {
+                // Treat space as a separate element
+                if (currentSyllable) {
+                    syllables.push(currentSyllable);
+                    currentSyllable = '';
+                }
+                if (this.spaces === true) {
+                    syllables.push(' ');
+                }
+                i++;
+                continue;
+            }
+
+            if (char === 'n' && (nextChar === 'g' || nextChar === 'y')) {
+                // Handle "ng" and "ny"
+                char += nextChar;
+                i++;
+            } else if (char === 'd' && nextChar === 'h') {
+                // Handle "dh"
+                char += nextChar;
+                i++;
+            } else if (char === 't' && nextChar === 'h') {
+                // Handle "th"
+                char += nextChar;
+                i++;
+            }
+
+            currentSyllable += char;
+
+            if (this.isVowel(nextChar)) {
+                currentSyllable += nextChar;
+                i++; // Skip the next character since it's part of the current syllable
+            }
+
+            // If the next character is a consonant or the end of the string, end the current syllable
+            if (this.isConsonant(nextChar) || !nextChar || (nextChar && nextNextChar && this.isConsonant(nextNextChar))) {
+                syllables.push(currentSyllable);
+                currentSyllable = '';
+            }
+
+            i++;
+        }
+
+        // Add any remaining characters to the last syllable
+        if (currentSyllable) {
+            syllables.push(currentSyllable);
+        }
+
+        return syllables;
+    }
+
     getAksara(): string {
-        this.hanacaraka = this.text.toLowerCase();
-        if (this.spaces === false) this.hanacaraka = this.hanacaraka.replace(/ /g, '');
-        this.hanacaraka = this.hanacaraka.replace(/ha/g, 'ꦲ');
-        this.hanacaraka = this.hanacaraka.replace(/hi/g, 'ꦲꦶ');
-        this.hanacaraka = this.hanacaraka.replace(/hu/g, 'ꦲꦸ');
-        this.hanacaraka = this.hanacaraka.replace(/he/g, 'ꦲꦼ');
-        this.hanacaraka = this.hanacaraka.replace(/hé/g, 'ꦲꦺ');
-        this.hanacaraka = this.hanacaraka.replace(/ho/g, 'ꦲꦼ');
-        this.hanacaraka = this.hanacaraka.replace(/na/g, 'ꦤ');
-        this.hanacaraka = this.hanacaraka.replace(/ni/g, 'ꦤꦶ');
-        this.hanacaraka = this.hanacaraka.replace(/nu/g, 'ꦤꦸ');
-        this.hanacaraka = this.hanacaraka.replace(/ne/g, 'ꦤꦺ');
-        this.hanacaraka = this.hanacaraka.replace(/né/g, 'ꦤꦺ');
-        this.hanacaraka = this.hanacaraka.replace(/no/g, 'ꦤꦼ');
-        this.hanacaraka = this.hanacaraka.replace(/ca/g, 'ꦕ');
-        this.hanacaraka = this.hanacaraka.replace(/ci/g, 'ꦕꦶ');
-        this.hanacaraka = this.hanacaraka.replace(/cu/g, 'ꦕꦸ');
-        this.hanacaraka = this.hanacaraka.replace(/ce/g, 'ꦕꦺ');
-        this.hanacaraka = this.hanacaraka.replace(/co/g, 'ꦕꦼ');
-        this.hanacaraka = this.hanacaraka.replace(/ra/g, 'ꦫ');
-        this.hanacaraka = this.hanacaraka.replace(/ri/g, 'ꦫꦶ');
-        this.hanacaraka = this.hanacaraka.replace(/ru/g, 'ꦫꦸ');
-        this.hanacaraka = this.hanacaraka.replace(/re/g, 'ꦫꦺ');
-        this.hanacaraka = this.hanacaraka.replace(/ro/g, 'ꦫꦼ');
-        this.hanacaraka = this.hanacaraka.replace(/ka/g, 'ꦏ');
-        this.hanacaraka = this.hanacaraka.replace(/ki/g, 'ꦏꦶ');
-        this.hanacaraka = this.hanacaraka.replace(/ku/g, 'ꦏꦸ');
-        this.hanacaraka = this.hanacaraka.replace(/ke/g, 'ꦏꦺ');
-        this.hanacaraka = this.hanacaraka.replace(/ko/g, 'ꦏꦼ');
-        this.hanacaraka = this.hanacaraka.replace(/da/g, 'ꦢ');
-        this.hanacaraka = this.hanacaraka.replace(/di/g, 'ꦢꦶ');
-        this.hanacaraka = this.hanacaraka.replace(/du/g, 'ꦢꦸ');
-        this.hanacaraka = this.hanacaraka.replace(/de/g, 'ꦢꦺ');
-        this.hanacaraka = this.hanacaraka.replace(/do/g, 'ꦢꦼ');
-        this.hanacaraka = this.hanacaraka.replace(/ta/g, 'ꦠ');
-        this.hanacaraka = this.hanacaraka.replace(/ti/g, 'ꦠꦶ');
-        this.hanacaraka = this.hanacaraka.replace(/tu/g, 'ꦠꦸ');
-        this.hanacaraka = this.hanacaraka.replace(/te/g, 'ꦠꦺ');
-        this.hanacaraka = this.hanacaraka.replace(/to/g, 'ꦠꦼ');
-        this.hanacaraka = this.hanacaraka.replace(/sa/g, 'ꦱ');
-        this.hanacaraka = this.hanacaraka.replace(/si/g, 'ꦱꦶ');
-        this.hanacaraka = this.hanacaraka.replace(/su/g, 'ꦱꦸ');
-        this.hanacaraka = this.hanacaraka.replace(/se/g, 'ꦱꦺ');
-        this.hanacaraka = this.hanacaraka.replace(/so/g, 'ꦱꦼ');
-        this.hanacaraka = this.hanacaraka.replace(/wa/g, 'ꦮ');
-        this.hanacaraka = this.hanacaraka.replace(/wi/g, 'ꦮꦶ');
-        this.hanacaraka = this.hanacaraka.replace(/wu/g, 'ꦮꦸ');
-        this.hanacaraka = this.hanacaraka.replace(/we/g, 'ꦮꦺ');
-        this.hanacaraka = this.hanacaraka.replace(/wo/g, 'ꦮꦼ');
-        this.hanacaraka = this.hanacaraka.replace(/la/g, 'ꦭ');
-        this.hanacaraka = this.hanacaraka.replace(/li/g, 'ꦭꦶ');
-        this.hanacaraka = this.hanacaraka.replace(/lu/g, 'ꦭꦸ');
-        this.hanacaraka = this.hanacaraka.replace(/le/g, 'ꦭꦺ');
-        this.hanacaraka = this.hanacaraka.replace(/lo/g, 'ꦭꦼ');
-        this.hanacaraka = this.hanacaraka.replace(/pa/g, 'ꦥ');
-        this.hanacaraka = this.hanacaraka.replace(/pi/g, 'ꦥꦶ');
-        this.hanacaraka = this.hanacaraka.replace(/pu/g, 'ꦥꦸ');
-        this.hanacaraka = this.hanacaraka.replace(/pe/g, 'ꦥꦺ');
-        this.hanacaraka = this.hanacaraka.replace(/po/g, 'ꦥꦼ');
-        this.hanacaraka = this.hanacaraka.replace(/dha/g, 'ꦝ');
-        this.hanacaraka = this.hanacaraka.replace(/dhi/g, 'ꦝꦶ');
-        this.hanacaraka = this.hanacaraka.replace(/dhu/g, 'ꦝꦸ');
-        this.hanacaraka = this.hanacaraka.replace(/dhe/g, 'ꦝꦺ');
-        this.hanacaraka = this.hanacaraka.replace(/dho/g, 'ꦝꦼ');
-        this.hanacaraka = this.hanacaraka.replace(/ja/g, 'ꦗ');
-        this.hanacaraka = this.hanacaraka.replace(/ji/g, 'ꦗꦶ');
-        this.hanacaraka = this.hanacaraka.replace(/ju/g, 'ꦗꦸ');
-        this.hanacaraka = this.hanacaraka.replace(/je/g, 'ꦗꦺ');
-        this.hanacaraka = this.hanacaraka.replace(/jo/g, 'ꦗꦼ');
-        this.hanacaraka = this.hanacaraka.replace(/ya/g, 'ꦪ');
-        this.hanacaraka = this.hanacaraka.replace(/yi/g, 'ꦪꦶ');
-        this.hanacaraka = this.hanacaraka.replace(/yu/g, 'ꦪꦸ');
-        this.hanacaraka = this.hanacaraka.replace(/ye/g, 'ꦪꦺ');
-        this.hanacaraka = this.hanacaraka.replace(/yo/g, 'ꦪꦼ');
-        this.hanacaraka = this.hanacaraka.replace(/nya/g, 'ꦚ');
-        this.hanacaraka = this.hanacaraka.replace(/nyi/g, 'ꦚꦶ');
-        this.hanacaraka = this.hanacaraka.replace(/nyu/g, 'ꦚꦸ');
-        this.hanacaraka = this.hanacaraka.replace(/nye/g, 'ꦚꦺ');
-        this.hanacaraka = this.hanacaraka.replace(/nyo/g, 'ꦚꦼ');
-        this.hanacaraka = this.hanacaraka.replace(/ma/g, 'ꦩ');
-        this.hanacaraka = this.hanacaraka.replace(/mi/g, 'ꦩꦶ');
-        this.hanacaraka = this.hanacaraka.replace(/mu/g, 'ꦩꦸ');
-        this.hanacaraka = this.hanacaraka.replace(/me/g, 'ꦩꦺ');
-        this.hanacaraka = this.hanacaraka.replace(/mo/g, 'ꦩꦼ');
-        this.hanacaraka = this.hanacaraka.replace(/ga/g, 'ꦒ');
-        this.hanacaraka = this.hanacaraka.replace(/gi/g, 'ꦒꦶ');
-        this.hanacaraka = this.hanacaraka.replace(/gu/g, 'ꦒꦸ');
-        this.hanacaraka = this.hanacaraka.replace(/ge/g, 'ꦒꦺ');
-        this.hanacaraka = this.hanacaraka.replace(/go/g, 'ꦒꦼ');
-        this.hanacaraka = this.hanacaraka.replace(/ba/g, 'ꦧ');
-        this.hanacaraka = this.hanacaraka.replace(/bi/g, 'ꦧꦶ');
-        this.hanacaraka = this.hanacaraka.replace(/bu/g, 'ꦧꦸ');
-        this.hanacaraka = this.hanacaraka.replace(/be/g, 'ꦧꦺ');
-        this.hanacaraka = this.hanacaraka.replace(/bo/g, 'ꦧꦼ');
-        this.hanacaraka = this.hanacaraka.replace(/tha/g, 'ꦛ');
-        this.hanacaraka = this.hanacaraka.replace(/thi/g, 'ꦛꦶ');
-        this.hanacaraka = this.hanacaraka.replace(/thu/g, 'ꦛꦸ');
-        this.hanacaraka = this.hanacaraka.replace(/the/g, 'ꦛꦺ');
-        this.hanacaraka = this.hanacaraka.replace(/tho/g, 'ꦛꦼ');
-        this.hanacaraka = this.hanacaraka.replace(/nga/g, 'ꦔ');
-        this.hanacaraka = this.hanacaraka.replace(/ngi/g, 'ꦔꦶ');
-        this.hanacaraka = this.hanacaraka.replace(/ngu/g, 'ꦔꦸ');
-        this.hanacaraka = this.hanacaraka.replace(/nge/g, 'ꦔꦺ');
-        this.hanacaraka = this.hanacaraka.replace(/ngo/g, 'ꦔꦼ');
-        this.hanacaraka = this.hanacaraka.replace(/a/g, 'ꦄ');
-        this.hanacaraka = this.hanacaraka.replace(/i/g, 'ꦆ');
-        this.hanacaraka = this.hanacaraka.replace(/u/g, 'ꦈ');
-        this.hanacaraka = this.hanacaraka.replace(/e/g, 'ꦌ');
-        this.hanacaraka = this.hanacaraka.replace(/o/g, 'ꦎ');
+        this.separateSyllables(this.text).forEach((syllable) => {
+            let aksara = '';
+            let i = 0;
+
+            if (syllable.length === 1) {
+                // Handle single character syllables
+                let char = syllable[0];
+                if (this.isVowel(char)) {
+                    aksara += this.normalAksaraVowels[char];
+                } else if (char === ' ') {
+                    aksara += ' ';
+                } else if (this.isConsonant(char)) {
+                    aksara += this.initialConsonantAksara[char] + this.pangkon;
+                }
+            } else {
+                while (i < syllable.length) {
+                    let char = syllable[i];
+                    let nextChar = syllable[i + 1];
+                    let nextNextChar = syllable[i + 2];
+
+                    if (char === 'n' && (nextChar === 'g' || nextChar === 'y')) {
+                        // Handle "ng" and "ny"
+                        char += nextChar;
+                        i++;
+                    } else if (char === 'd' && nextChar === 'h') {
+                        // Handle "dh"
+                        char += nextChar;
+                        i++;
+                    } else if (char === 't' && nextChar === 'h') {
+                        // Handle "th"
+                        char += nextChar;
+                        i++;
+                    }
+
+                    if (this.isConsonant(char)) {
+                        // Initial consonant
+                        if (i === 0) {
+                            aksara += this.initialConsonantAksara[char];
+                        } else {
+                            // Wyanjana
+                            aksara += this.wyanjanaAksara[char];
+                        }
+                    }
+
+                    if (this.isVowel(char)) {
+                        aksara += this.vowelDiacritics[char];
+                    }
+
+                    i++;
+                }
+            }
+
+            this.hanacaraka += aksara;
+        });
+
         return this.hanacaraka;
     }
+
 }
 
 export { Aksara };

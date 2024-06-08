@@ -16,3 +16,6 @@ yarn-error.log
 # Build output
 dist/
 out/
+
+# Project Specific
+src/scratchpad.ts
