@@ -29,6 +29,16 @@ describe('Aksara', () => {
 
   test('should be able to handle "th and dh")', () => {
     const aksara = new Aksara('tha dha');
-    expect(aksara.getAksara()).toBe("ꦡ");
+    expect(aksara.getAksara()).toBe("ꦡꦣ");
+  });
+
+  test('should be able to handle "ng and ny")', () => {
+    const aksara = new Aksara('nga nya');
+    expect(aksara.getAksara()).toBe("ꦔꦚ");
+  });
+
+  test('should be able to handle longer words that are more complicated', () => {
+    const aksara = new Aksara('ngaladhu');
+    expect(aksara.getAksara()).toBe("ꦔꦭꦣꦸ");
   });
 });

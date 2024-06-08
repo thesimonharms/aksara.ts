@@ -1,7 +1,8 @@
 type Syllable = {
     initial: string,
     vowel: string,
-    final: string
+    final: string,
+    space: boolean
 }
 
 class Aksara {
@@ -33,7 +34,7 @@ class Aksara {
         'ng': 'ꦔ',
         'ny': 'ꦚ',
         'th': 'ꦡ',
-        'dh': 'ꦝ',
+        'dh': 'ꦣ',
         'h': 'ꦲ',
         'n': 'ꦤ',
         'c': 'ꦕ',
@@ -142,7 +143,7 @@ class Aksara {
                 } else {
                     char += nextChar;
                 }
-                i+= 2;
+                i += 2;
             } else if (char === 'd' && nextChar === 'h') {
                 // Handle "dh"
                 if (this.isVowel(nextNextChar)) {
@@ -150,7 +151,7 @@ class Aksara {
                 } else {
                     char += nextChar;
                 }
-                i+= 2;
+                i += 2;
             } else if (char === 't' && nextChar === 'h') {
                 // Handle "th"
                 if (this.isVowel(nextNextChar)) {
@@ -158,7 +159,7 @@ class Aksara {
                 } else {
                     char += nextChar;
                 }
-                i+= 2;
+                i += 2;
             }
 
             currentSyllable += char;
@@ -189,7 +190,8 @@ class Aksara {
         let syllable: Syllable = {
             initial: '',
             vowel: '',
-            final: ''
+            final: '',
+            space: false
         };
 
         let i = 0;
@@ -197,18 +199,23 @@ class Aksara {
         while (i < input.length) {
             let char = input[i];
             let nextChar = input[i + 1];
+
+            if (char === ' ') {
+                syllable.initial += char;
+                syllable.space = true;
+            }
             if (this.isVowel(char)) {
                 syllable.vowel += char;
             }
             if (i === 0 && this.isConsonant(char)) {
-                if (this.isConsonant(nextChar) && nextChar !== 'h') {
-                    syllable.initial += char;
-                } else if (this.isConsonant(nextChar) && nextChar === 'h') {
+                if (this.isConsonant(nextChar) && nextChar === 'h') {
                     syllable.initial += char + nextChar;
                     i++;
                 } else if (char === 'n' && this.isConsonant(nextChar) && (nextChar === 'g' || nextChar === 'y')) {
                     syllable.initial += char + nextChar;
                     i++;
+                } else if (this.isConsonant(char)) {
+                    syllable.initial += char;
                 }
             } else if (this.isConsonant(char)) {
                 if (this.isConsonant(nextChar) && nextChar !== 'h') {
@@ -230,73 +237,21 @@ class Aksara {
         this.separateSyllables(this.text).forEach((syllable) => {
             let syllableObj = this.divideSyllables(syllable);
             let aksara = '';
-            if (syllableObj.initial) {
-                
+            if (syllableObj.initial !== '') {
+                aksara += this.initialConsonantAksara[syllableObj.initial];
+                aksara += this.vowelDiacritics[syllableObj.vowel];
+            } else {
+                aksara += this.normalAksaraVowels[syllableObj.vowel];
             }
+            if (this.spaces === true && syllableObj.space === true) {
+                aksara = ' ';
+            }
+            console.log(aksara);
             this.hanacaraka += aksara;
         });
 
         return this.hanacaraka;
     }
-
-    /* getAksara(): string {
-        this.separateSyllables(this.text).forEach((syllable) => {
-            let aksara = '';
-            let i = 0;
-
-            if (syllable.length === 1) {
-                // Handle single character syllables
-                let char = syllable[0];
-                if (this.isVowel(char)) {
-                    aksara += this.normalAksaraVowels[char];
-                } else if (char === ' ') {
-                    aksara += ' ';
-                } else if (this.isConsonant(char)) {
-                    aksara += this.initialConsonantAksara[char] + this.pangkon;
-                }
-            } else {
-                while (i < syllable.length) {
-                    let char = syllable[i];
-                    let nextChar = syllable[i + 1];
-                    let nextNextChar = syllable[i + 2];
-
-                    if (char === 'n' && (nextChar === 'g' || nextChar === 'y')) {
-                        // Handle "ng" and "ny"
-                        char += nextChar;
-                        i++;
-                    } else if (char === 'd' && nextChar === 'h') {
-                        // Handle "dh"
-                        char += nextChar;
-                        i++;
-                    } else if (char === 't' && nextChar === 'h') {
-                        // Handle "th"
-                        char += nextChar;
-                        i++;
-                    }
-
-                    if (this.isConsonant(char)) {
-                        // Initial consonant
-                        if (i === 0) {
-                            aksara += this.initialConsonantAksara[char];
-                        } else {
-                            // Wyanjana
-                            aksara += this.wyanjanaAksara[char];
-                        }
-                    }
-
-                    if (this.isVowel(char)) {
-                        aksara += this.vowelDiacritics[char];
-                    }
-
-                    i++;
-                }
-            }
-
-            this.hanacaraka += aksara;
-        });
-
-        return this.hanacaraka;
-    } */
 
 }
 
