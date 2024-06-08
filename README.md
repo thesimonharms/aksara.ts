@@ -7,6 +7,8 @@ This is Aksara.ts , a project that currently is doing Javanese script to Latin s
 npm install aksara-ts
 ```
 
+I haven't actually packaged an NPM package yet though...
+
 ```typescript
 // Import Aksara
 import { Aksara } from "aksara-ts";

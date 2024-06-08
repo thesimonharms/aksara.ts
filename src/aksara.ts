@@ -12,6 +12,8 @@ class Aksara {
 
     consonants: Set<string> = new Set(['h', 'n', 'c', 'r', 'k', 'd', 't', 's', 'w', 'l', 'p', 'j', 'y', 'm', 'g', 'b']);
 
+    diacriticConsonants: Set<string> = new Set(['r', 'h', 'm', 'ng']);
+
     pangkon: string = '꧀';
 
     consonantDiacritics: { [key: string]: string } = {
@@ -242,6 +244,11 @@ class Aksara {
                 aksara += this.vowelDiacritics[syllableObj.vowel];
             } else {
                 aksara += this.normalAksaraVowels[syllableObj.vowel];
+            }
+            if (syllableObj.final !== '') {
+                if(this.diacriticConsonants.has(syllableObj.final)) {
+                    aksara += this.consonantDiacritics[syllableObj.final];
+                }
             }
             if (this.spaces === true && syllableObj.space === true) {
                 aksara = ' ';
