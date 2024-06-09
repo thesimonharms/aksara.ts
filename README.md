@@ -17,3 +17,9 @@ import { Aksara } from "aksara-ts";
 const name = new Aksara("Simon");
 const carakan = name.getAksara(); // Simon -> ꦱꦶꦩꦺꦴꦤ꧀
 ```
+
+## TODO
+
+ - Enable support for consonant final syllables (maybe by not dividing by strict syllables anymore but instead dividing into manageable pieces...)
+ - Enable support for explicit aksara vowels instead of only current h+vowel system.
+ 
