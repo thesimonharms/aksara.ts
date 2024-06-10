@@ -232,7 +232,9 @@ class Aksara {
         return syllables;
     }
 
+    // Function to divide syllables into initial, vowel, and final, and include space information
     divideSyllables(input: string): Syllable {
+        // Initialize an empty syllable object
         let syllable: Syllable = {
             initial: '',
             vowel: '',
@@ -240,30 +242,41 @@ class Aksara {
             space: false
         };
 
+        // Start at the beginning of the syllable (index 0)
         let i = 0;
 
+        // Iterate through the syllable
         while (i < input.length) {
+            // Set char as the current character
             let char = input[i];
+            // Set nextChar as the next character
             let nextChar = input[i + 1];
 
+            // Handle spaces
             if (char === ' ') {
                 syllable.initial += char;
                 syllable.space = true;
             }
+            // If the character is a vowel, add it to the vowel part of the syllable
             if (this.isVowel(char)) {
                 syllable.vowel += char;
             }
+            // If the character is a consonant, add it to the initial or final part of the syllable
             if (i === 0 && this.isConsonant(char)) {
                 if (this.isConsonant(nextChar) && nextChar === 'h') {
+                    // Handle dh and th
                     syllable.initial += char + nextChar;
                     i++;
                 } else if (char === 'n' && this.isConsonant(nextChar) && (nextChar === 'g' || nextChar === 'y')) {
+                    // Handle ng and ny
                     syllable.initial += char + nextChar;
                     i++;
                 } else if (this.isConsonant(char)) {
+                    // Handle single character consonants
                     syllable.initial += char;
                 }
             } else if (this.isConsonant(char)) {
+                // Currently useless code that doesn't work, because the input fed to it doesn't have final consonants. TODO: WILL FIX.
                 if (this.isConsonant(nextChar) && nextChar !== 'h') {
                     syllable.final += char;
                 } else if (this.isConsonant(nextChar) && nextChar === 'h') {
@@ -279,17 +292,28 @@ class Aksara {
         return syllable;
     }
 
+    // Function to return aksara from latin (probably will only ever work for Javanese, but who knows?)
     getAksara(): string {
+        // This whole function will need to be retoolled when I change separateSyllables to not separate
+        // by strict syllables but by the smallest convertable units that can be converted to aksara.
+        // Separate the syllables and iterate through them.
         this.separateSyllables(this.text).forEach((syllable) => {
+            // Divide the syllable into initial, vowel, and final parts.
             let syllableObj = this.divideSyllables(syllable);
+            // Reset the aksara variable
             let aksara = '';
+            // If the syllable has an initial consonant, add it to the aksara
             if (syllableObj.initial !== '') {
+                // If the initial consonant is a diacritic consonant, use the diacritic aksara,  retool later when final consonants work. TODO: WILL FIX.
                 aksara += this.initialConsonantAksara[syllableObj.initial];
                 aksara += this.vowelDiacritics[syllableObj.vowel];
             } else {
+                // 
                 aksara += this.normalAksaraVowels[syllableObj.vowel];
             }
+            // If the syllable has a final consonant, add it to the aksara
             if (syllableObj.final !== '') {
+                // 
                 if(this.diacriticConsonants.has(syllableObj.final)) {
                     aksara += this.consonantDiacritics[syllableObj.final];
                 }
@@ -297,7 +321,6 @@ class Aksara {
             if (this.spaces === true && syllableObj.space === true) {
                 aksara = ' ';
             }
-            console.log(aksara);
             this.hanacaraka += aksara;
         });
 
