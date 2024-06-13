@@ -329,22 +329,24 @@ class Aksara {
                 previousPreSyllable = preSyllables[i - 1];
             }
             let currentPreSyllable = preSyllables[i];
-            let nextPreSyllable = preSyllables[i + 1];
+            let nextPreSyllable = (i + 1 < preSyllables.length) ? preSyllables[i + 1] : undefined;
             if (previousPreSyllable !== this.emptyPreSyllable) {
-                if (currentPreSyllable.initial !== '' && previousPreSyllable.vowel !== '' && nextPreSyllable.initial !== '' && nextPreSyllable !== undefined) {
+                if (currentPreSyllable.initial !== '' && previousPreSyllable.vowel !== '' && nextPreSyllable && nextPreSyllable.initial !== '') {
                     syllables.push({
                         initial: currentPreSyllable.initial,
                         vowel: currentPreSyllable.vowel,
                         final: '',
                         space: currentPreSyllable.space
                     });
-                } else if (currentPreSyllable.initial === '' && nextPreSyllable.vowel === '' && nextPreSyllable !== undefined) {
+                    i++;
+                } else if (currentPreSyllable.initial === '' && nextPreSyllable && nextPreSyllable.vowel === '' && nextPreSyllable !== undefined) {
                     syllables.push({
                         initial: '',
                         vowel: currentPreSyllable.vowel,
                         final: nextPreSyllable.initial,
                         space: nextPreSyllable.space
                     });
+                    i+=2;
                 } else if (currentPreSyllable.initial === '' && currentPreSyllable.vowel === '' && currentPreSyllable.space === true) {
                     syllables.push({
                         initial: '',
@@ -352,6 +354,7 @@ class Aksara {
                         final: '',
                         space: currentPreSyllable.space
                     });
+                    i++;
                 } else {
                     syllables.push({
                         initial: currentPreSyllable.initial,
@@ -359,22 +362,25 @@ class Aksara {
                         final: '',
                         space: currentPreSyllable.space
                     });
+                    i++;
                 }
             } else {
-                if (nextPreSyllable.vowel === '' && nextPreSyllable !== undefined) {
+                if (nextPreSyllable && nextPreSyllable.vowel === '') {
                     syllables.push({
                         initial: currentPreSyllable.initial,
                         vowel: currentPreSyllable.vowel,
                         final: nextPreSyllable.initial,
                         space: currentPreSyllable.space
                     });
-                } else if (nextPreSyllable.vowel !== '' && nextPreSyllable !== undefined) {
+                    i+=2;
+                } else if (nextPreSyllable && nextPreSyllable.vowel !== '') {
                     syllables.push({
                         initial: currentPreSyllable.initial,
                         vowel: currentPreSyllable.vowel,
                         final: '',
                         space: currentPreSyllable.space
                     });
+                    i++;
                 } else {
                     syllables.push({
                         initial: currentPreSyllable.initial,
@@ -382,9 +388,9 @@ class Aksara {
                         final: '',
                         space: currentPreSyllable.space
                     });
+                    i++;
                 }
             }
-            i++;
         }
 
         return syllables;
@@ -407,7 +413,7 @@ class Aksara {
                 aksara += this.initialConsonantAksara[syllableObj.initial];
                 aksara += this.vowelDiacritics[syllableObj.vowel];
             } else {
-                // 
+                // TODO: Implement this for explicit vowels
                 aksara += this.normalAksaraVowels[syllableObj.vowel];
             }
             // If the syllable has a final consonant, add it to the aksara
