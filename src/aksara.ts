@@ -404,7 +404,7 @@ class Aksara {
         let preSyllables: PreSyllable[] = this.divideSyllables(this.separateSyllables(this.text));
         // Analyze the syllables and return the aksara.
         let syllables = this.analyzePreSyllables(preSyllables);
-        syllables.forEach((syllableObj) => {
+        /* syllables.forEach((syllableObj) => {
             // Reset the aksara variable
             let aksara = '';
             // If the syllable has an initial consonant, add it to the aksara
@@ -426,7 +426,37 @@ class Aksara {
                 aksara = ' ';
             }
             this.hanacaraka += aksara;
-        });
+        }); */
+
+        let i = 0;
+        while (i < syllables.length) {
+            let syllable = syllables[i];
+            let nextSyllable = (i + 1 < syllables.length) ? syllables[i + 1] : undefined;
+            let aksara = '';
+
+            if (this.spaces === true && syllable.space === true) {
+                aksara = ' ';
+            }
+
+            if (syllable.initial === '') {
+                aksara += this.normalAksaraVowels[syllable.vowel];
+            } else {
+                aksara += this.initialConsonantAksara[syllable.initial];
+                aksara += this.vowelDiacritics[syllable.vowel];
+            }
+
+            if (syllable.final !== '') {
+                if (nextSyllable && this.diacriticConsonants.has(syllable.final)) {
+                    aksara += this.consonantDiacritics[syllable.final];
+                } else if (nextSyllable && !this.diacriticConsonants.has(syllable.final)) {
+                    aksara += this.wyanjanaAksara[syllable.final];
+                } else {
+                    aksara += this.initialConsonantAksara[syllable.final] + this.pangkon;
+                }
+            }
+            this.hanacaraka+=aksara;
+            i++;
+        }
 
         return this.hanacaraka;
     }
