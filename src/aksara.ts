@@ -1,4 +1,10 @@
-type Syllable = {
+type PreSyllable = {
+    initial: string,
+    vowel: string,
+    space: boolean
+}
+
+type CompleteSyllable = {
     initial: string,
     vowel: string,
     final: string,
@@ -20,6 +26,12 @@ class Aksara {
 
     // Pangkon variable used for sentence or word final consonants
     pangkon: string = '꧀';
+
+    emptyPreSyllable: PreSyllable = {
+        initial: '',
+        vowel: '',
+        space: false
+    }
 
     // The diacritics used for consonants in Javanese
     consonantDiacritics: { [key: string]: string } = {
@@ -134,22 +146,59 @@ class Aksara {
         return this.diacriticConsonants.has(char);
     }
 
-    // TODO: Implement this function properly
-    nextCharacterFinalConsonant(char: string, nextChar: string, nextNextChar: string, nextNextNextChar: string): boolean {
-        return this.isConsonant(nextChar) && !this.isVowel(nextNextChar) && !this.isVowel(nextNextNextChar);
+    isTwoCharacterConsonant(char: string, nextChar: string): boolean {
+        if (char === 'n' && (nextChar === 'g' || nextChar === 'y')) {
+            return true;
+        } else if (char === 'd' && nextChar === 'h') {
+            return true;
+        } else if (char === 't' && nextChar === 'h') {
+            return true;
+        } else {
+            return false;
+        }
     }
 
-    // Function to separate syllables in Latin script Javanese
-    // TODO: Make this function able to handle consonant final syllables.
-    separateSyllables(input: string): string[] {
-        // Empty array to store syllables
-        const syllables: string[] = [];
-        // Empty string to store the current syllable
-        let currentSyllable = '';
-        // Start at the beginning of the string (index 0)
-        let i = 0;
+    isFinalConsonant(nextChar: string, nextNextChar: string = '', nextNextNextChar: string = '', lastChar: string = ''): boolean {
+        if (this.isConsonant(nextChar) && this.isVowel(nextNextChar)) {
+            return false;
+        } else if (this.isConsonant(nextChar) && this.isConsonant(nextNextChar) && this.isVowel(nextNextNextChar)) {
+            return true;
+        } else if (this.isTwoCharacterConsonant(nextChar, nextNextChar) && this.isConsonant(nextNextNextChar) && this.isVowel(lastChar)) {
+            return true;
+        } else if (this.isVowel(nextChar)) {
+            return false;
+        } else {
+            return false;
+        }
+    }
 
-        // Iterate through the string
+    containsVowel(syllable: string): boolean {
+        let i = 0;
+        let vowelFound = false;
+        while (i < syllable.length) {
+            if (this.isVowel(syllable[i])) {
+                vowelFound = true;
+            }
+            i++;
+        }
+        return vowelFound;
+    }
+
+    /**
+     * Separates a given input string into individual syllables.
+     *
+     * @param input - The input string to separate into syllables.
+     * @returns An array of strings representing the syllables.
+     */
+    separateSyllables(input: string): string[] {
+        // Initialize an empty array to store the output syllables
+        const syllables: string[] = [];
+        // Initialize an empty string to store the current syllable
+        let currentSyllable = '';
+
+        // Start at the beginning of the input string (index 0)
+        let i = 0;
+        // Iterate through the input string
         while (i < input.length) {
             // Set char as the current character
             let char = input[i];
@@ -157,139 +206,188 @@ class Aksara {
             let nextChar = input[i + 1];
             // Set nextNextChar as the character after the next character
             let nextNextChar = input[i + 2];
+            // Set nextNextNextChar as the character after the character after the next character
+            let nextNextNextChar = input[i + 3];
 
-            // Handle spaces
-            if (char === ' ') {
-                // Treat space as a separate element
-                if (currentSyllable) {
-                    // Push the current syllable to the syllables array
-                    syllables.push(currentSyllable);
-                    // Reset the current syllable
-                    currentSyllable = '';
-                }
-                // If spaces are enabled, add a space to the syllables array
-                if (this.spaces === true) {
-                    syllables.push(' ');
-                }
-                // Continue iterating and skip the rest of the loop
+            // If the current character is a consonant and the next character is a vowel, or if the next character is a space, end the current syllable
+            // Also end the syllable if the next character is a final consonant
+            if (this.isConsonant(char) && this.isVowel(nextChar)) {
+                syllables.push(char + nextChar);
+                // Increment i by 2 to skip the next character
+                i += 2;
+            } else if (char === ' ' && this.spaces === true) {
+                // If the current character is a space, add a space to the syllables array
+                syllables.push(' ');
+                // Increment i by 1 to skip the next character
                 i++;
-                continue;
-            }
-
-            // Detect ng and ny, the nextChar === 'h' is probably not necassary but I don't want to have to fix this later.
-            if (char === 'n' && (nextChar === 'g' || nextChar === 'h' || nextChar === 'y')) {
-                // Handle "ng" and "ny"
-                if (this.isVowel(nextNextChar)) {
-                    char += nextChar + nextNextChar;
-                } else {
-                    char += nextChar;
+            } else if (this.isFinalConsonant(char, nextChar, nextNextChar, nextNextNextChar)) {
+                // Test for final consonants
+                if (this.isTwoCharacterConsonant(char, nextChar) && this.isVowel(nextNextChar)) {
+                    // If it is a two consonant pair + vowel, add all 3 to the syllable array
+                    syllables.push(char + nextChar + nextNextChar);
+                    // Increment i by 3 to skip the next two characters
+                    i += 3;
+                } else if (this.isTwoCharacterConsonant(char, nextChar) && this.isConsonant(nextNextChar) && this.isVowel(nextNextNextChar)) {
+                    // If it is a two consonant pair final consonant, add the consonant pair to the syllable array by itself
+                    syllables.push(char + nextChar);
+                    // Increment i by 2 to skip the next character
+                    i += 2;
                 }
-                // Skip 2 characters since "ng" and "ny" are 2 characters
-                i += 2;
-            } else if (char === 'd' && nextChar === 'h') {
-                // Handle "dh"
-                if (this.isVowel(nextNextChar)) {
-                    char += nextChar + nextNextChar;
-                } else {
-                    char += nextChar;
-                }
-                // Skip 2 characters since "dh" is 2 characters
-                i += 2;
-            } else if (char === 't' && nextChar === 'h') {
-                // Handle "th"
-                if (this.isVowel(nextNextChar)) {
-                    char += nextChar + nextNextChar;
-                } else {
-                    char += nextChar;
-                }
-                // Skip 2 characters since "th" is 2 characters
-                i += 2;
+            } else if (this.isVowel(char)) {
+                // Handle vowels
+                syllables.push(char);
+                // Skip to the next character
+                i++;
+            } else {
+                // If confused just increment i by 1
+                i++;
             }
-
-            // Add the current character to the current syllable
-            currentSyllable += char;
-
-            // If the next character is a vowel, add it to the current syllable
-            if (this.isVowel(nextChar)) {
-                currentSyllable += nextChar;
-                i++; // Skip the next character since it's part of the current syllable
-            }
-
-            // If the next character is a consonant or the end of the string, end the current syllable
-            if (this.isConsonant(nextChar) || !nextChar || (nextChar && nextNextChar && this.isConsonant(nextNextChar))) {
-                syllables.push(currentSyllable);
-                currentSyllable = '';
-            }
-
-            i++;
         }
 
-        // Add any remaining characters to the last syllable
-        if (currentSyllable) {
+        // Push the last syllable if it's not empty
+        if (currentSyllable !== '') {
+            // Probably a useless piece of code but once again, scared to remove it.
+            // TODO: Find out if this actually does anything
             syllables.push(currentSyllable);
         }
 
+        // Return syllable array (as string)
         return syllables;
     }
 
     // Function to divide syllables into initial, vowel, and final, and include space information
-    divideSyllables(input: string): Syllable {
-        // Initialize an empty syllable object
-        let syllable: Syllable = {
-            initial: '',
-            vowel: '',
-            final: '',
-            space: false
-        };
+    // TODO: Fix final consonants instead of bypassing to getAksara()
+    divideSyllables(input: string[]): PreSyllable[] {
 
-        // Start at the beginning of the syllable (index 0)
-        let i = 0;
+        let preSyllableArray: PreSyllable[] = [];
 
-        // Iterate through the syllable
-        while (i < input.length) {
-            // Set char as the current character
-            let char = input[i];
-            // Set nextChar as the next character
-            let nextChar = input[i + 1];
+        input.forEach((divSyllable => {
+            // Start at the beginning of the syllable (index 0)
+            let i = 0;
+            // Initialize an empty syllable object
+            let syllable: PreSyllable = {
+                initial: '',
+                vowel: '',
+                space: false
+            };
+            // Iterate through the syllable
+            while (i < divSyllable.length) {
+                // Set char as the current character
+                let char = divSyllable[i];
+                // Set nextChar as the next character
+                let nextChar = divSyllable[i + 1];
 
-            // Handle spaces
-            if (char === ' ') {
-                syllable.initial += char;
-                syllable.space = true;
-            }
-            // If the character is a vowel, add it to the vowel part of the syllable
-            if (this.isVowel(char)) {
-                syllable.vowel += char;
-            }
-            // If the character is a consonant, add it to the initial or final part of the syllable
-            if (i === 0 && this.isConsonant(char)) {
-                if (this.isConsonant(nextChar) && nextChar === 'h') {
-                    // Handle dh and th
-                    syllable.initial += char + nextChar;
-                    i++;
-                } else if (char === 'n' && this.isConsonant(nextChar) && (nextChar === 'g' || nextChar === 'y')) {
-                    // Handle ng and ny
-                    syllable.initial += char + nextChar;
-                    i++;
-                } else if (this.isConsonant(char)) {
-                    // Handle single character consonants
+                // Handle spaces
+                if (char === ' ') {
                     syllable.initial += char;
+                    syllable.space = true;
                 }
-            } else if (this.isConsonant(char)) {
-                // Currently useless code that doesn't work, because the input fed to it doesn't have final consonants. TODO: WILL FIX.
-                if (this.isConsonant(nextChar) && nextChar !== 'h') {
-                    syllable.final += char;
-                } else if (this.isConsonant(nextChar) && nextChar === 'h') {
-                    syllable.final += char + nextChar;
-                    i++;
-                } else if (char === 'n' && this.isConsonant(nextChar) && (nextChar === 'g' || nextChar === 'y')) {
-                    syllable.final += char + nextChar;
-                    i++;
+                // If the character is a vowel, add it to the vowel part of the syllable
+                if (this.isVowel(char)) {
+                    syllable.vowel += char;
+                }
+                // If the character is a consonant, add it to the initial or final part of the syllable
+                if (i === 0 && this.isConsonant(char)) {
+                    if (this.isConsonant(nextChar) && nextChar === 'h') {
+                        // Handle dh and th
+                        syllable.initial += char + nextChar;
+                        i++;
+                    } else if (char === 'n' && this.isConsonant(nextChar) && (nextChar === 'g' || nextChar === 'y')) {
+                        // Handle ng and ny
+                        syllable.initial += char + nextChar;
+                        i++;
+                    } else if (this.isConsonant(char)) {
+                        // Handle single character consonants
+                        syllable.initial += char;
+                    }
+                }
+                /* else if (this.isConsonant(char)) {
+                    // Currently useless code that doesn't work, because the input fed to it doesn't have final consonants. TODO: WILL FIX.
+                    if (this.isConsonant(nextChar) && nextChar !== 'h') {
+                        syllable.final += char;
+                    } else if (this.isConsonant(nextChar) && nextChar === 'h') {
+                        syllable.final += char + nextChar;
+                        i++;
+                    } else if (char === 'n' && this.isConsonant(nextChar) && (nextChar === 'g' || nextChar === 'y')) {
+                        syllable.final += char + nextChar;
+                        i++;
+                    }
+                } */
+                i++;
+            }
+            preSyllableArray.push(syllable);
+        }));
+        return preSyllableArray;
+    }
+
+    analyzePreSyllables(preSyllables: PreSyllable[]): CompleteSyllable[] {
+        let syllables: CompleteSyllable[] = [];
+        let previousPreSyllable = this.emptyPreSyllable;
+        let i = 0;
+        while (i < preSyllables.length) {
+            if (i !== 0) {
+                previousPreSyllable = preSyllables[i - 1];
+            }
+            let currentPreSyllable = preSyllables[i];
+            let nextPreSyllable = preSyllables[i + 1];
+            if (previousPreSyllable !== this.emptyPreSyllable) {
+                if (currentPreSyllable.initial !== '' && previousPreSyllable.vowel !== '' && nextPreSyllable.initial !== '' && nextPreSyllable !== undefined) {
+                    syllables.push({
+                        initial: currentPreSyllable.initial,
+                        vowel: currentPreSyllable.vowel,
+                        final: '',
+                        space: currentPreSyllable.space
+                    });
+                } else if (currentPreSyllable.initial === '' && nextPreSyllable.vowel === '' && nextPreSyllable !== undefined) {
+                    syllables.push({
+                        initial: '',
+                        vowel: currentPreSyllable.vowel,
+                        final: nextPreSyllable.initial,
+                        space: nextPreSyllable.space
+                    });
+                } else if (currentPreSyllable.initial === '' && currentPreSyllable.vowel === '' && currentPreSyllable.space === true) {
+                    syllables.push({
+                        initial: '',
+                        vowel: '',
+                        final: '',
+                        space: currentPreSyllable.space
+                    });
+                } else {
+                    syllables.push({
+                        initial: currentPreSyllable.initial,
+                        vowel: currentPreSyllable.vowel,
+                        final: '',
+                        space: currentPreSyllable.space
+                    });
+                }
+            } else {
+                if (nextPreSyllable.vowel === '' && nextPreSyllable !== undefined) {
+                    syllables.push({
+                        initial: currentPreSyllable.initial,
+                        vowel: currentPreSyllable.vowel,
+                        final: nextPreSyllable.initial,
+                        space: currentPreSyllable.space
+                    });
+                } else if (nextPreSyllable.vowel !== '' && nextPreSyllable !== undefined) {
+                    syllables.push({
+                        initial: currentPreSyllable.initial,
+                        vowel: currentPreSyllable.vowel,
+                        final: '',
+                        space: currentPreSyllable.space
+                    });
+                } else {
+                    syllables.push({
+                        initial: currentPreSyllable.initial,
+                        vowel: currentPreSyllable.vowel,
+                        final: '',
+                        space: currentPreSyllable.space
+                    });
                 }
             }
             i++;
         }
-        return syllable;
+
+        return syllables;
     }
 
     // Function to return aksara from latin (probably will only ever work for Javanese, but who knows?)
@@ -297,9 +395,10 @@ class Aksara {
         // This whole function will need to be retoolled when I change separateSyllables to not separate
         // by strict syllables but by the smallest convertable units that can be converted to aksara.
         // Separate the syllables and iterate through them.
-        this.separateSyllables(this.text).forEach((syllable) => {
-            // Divide the syllable into initial, vowel, and final parts.
-            let syllableObj = this.divideSyllables(syllable);
+        let preSyllables: PreSyllable[] = this.divideSyllables(this.separateSyllables(this.text));
+        // Analyze the syllables and return the aksara.
+        let syllables = this.analyzePreSyllables(preSyllables);
+        syllables.forEach((syllableObj) => {
             // Reset the aksara variable
             let aksara = '';
             // If the syllable has an initial consonant, add it to the aksara
@@ -313,8 +412,7 @@ class Aksara {
             }
             // If the syllable has a final consonant, add it to the aksara
             if (syllableObj.final !== '') {
-                // 
-                if(this.diacriticConsonants.has(syllableObj.final)) {
+                if (this.diacriticConsonants.has(syllableObj.final)) {
                     aksara += this.consonantDiacritics[syllableObj.final];
                 }
             }
