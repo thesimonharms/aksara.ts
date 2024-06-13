@@ -41,4 +41,9 @@ describe('Aksara', () => {
     const aksara = new Aksara('ngaladhu');
     expect(aksara.getAksara()).toBe("ꦔꦭꦣꦸ");
   });
+
+  test('should return the correct aksara for wong jawa', () => {
+    const aksara = new Aksara('wong jawa');
+    expect(aksara.getAksara()).toBe("ꦮꦺꦴꦁ ꦗꦮ");
+  });
 });
