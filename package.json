@@ -1,6 +1,6 @@
 {
   "name": "aksara-ts",
-  "version": "1.0",
+  "version": "1.0.0",
   "main": "src/aksara.ts",
   "scripts": {
     "test": "./node_modules/.bin/jest",
