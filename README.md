@@ -7,7 +7,6 @@ This is Aksara.ts , a project that currently is doing Javanese script to Latin s
 npm install aksara-ts
 ```
 
-I haven't actually packaged an NPM package yet though...
 ```typescript
 // Import Aksara
 import { Aksara } from "aksara-ts";
@@ -19,7 +18,7 @@ const carakan = name.getAksara(); // Simon -> ꦱꦶꦩꦺꦴꦤ꧀
 
 ## TODO
 
- - Enable support for consonant final syllables (maybe by not dividing by strict syllables anymore but instead dividing into manageable pieces...)
+ - [x] Enable support for consonant final syllables (maybe by not dividing by strict syllables anymore but instead dividing into manageable pieces...)
  - Enable support for explicit aksara vowels instead of only current h+vowel system.
  - Enable aksara -> latin
  - Maybe add an optional explicit breaks mode where a character like `_` can be used to explicitly break syllables ???

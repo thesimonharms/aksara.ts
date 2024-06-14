@@ -42,8 +42,43 @@ describe('Aksara', () => {
     expect(aksara.getAksara()).toBe("ꦔꦭꦣꦸ");
   });
 
+  test('Ng should be identifiable as a diacritic consonant', () => {
+    const aksara = new Aksara('');
+    expect(aksara.isDiacriticConsonant('ng')).toBe(true);
+  });
+
+  test('R should be identifiable as a diacritic consonant', () => {
+    const aksara = new Aksara('');
+    expect(aksara.isDiacriticConsonant('r')).toBe(true);
+  });
+
+  test('H should be identifiable as a diacritic consonant', () => {
+    const aksara = new Aksara('');
+    expect(aksara.isDiacriticConsonant('h')).toBe(true);
+  });
+
+  test('M should be identifiable as a diacritic consonant', () => {
+    const aksara = new Aksara('');
+    expect(aksara.isDiacriticConsonant('m')).toBe(true);
+  });
+
   test('should return the correct aksara for wong jawa', () => {
     const aksara = new Aksara('wong jawa');
-    expect(aksara.getAksara()).toBe("ꦮꦺꦴꦁ ꦗꦮ");
+    expect(aksara.getAksara()).toBe("ꦮꦺꦴꦁꦗꦮ");
+  });
+
+  test('should handle consonant final words that are not diacritic consonants', () => {
+    const aksara = new Aksara('orak');
+    expect(aksara.getAksara()).toBe("ꦲꦺꦴꦫꦏ꧀");
+  });
+
+  test('should handle consonant final words that are diacritic consonants', () => {
+    const aksara = new Aksara('ruwing');
+    expect(aksara.getAksara()).toBe("ꦫꦸꦮꦶꦁ");
+  });
+
+  test('should handle words with wyanjana', () => {
+    const aksara = new Aksara('wyanjana');
+    expect(aksara.getAksara()).toBe("ꦮ꧀ꦪꦤ꧀ꦗꦤ");
   });
 });
