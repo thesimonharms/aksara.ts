@@ -1,5 +1,9 @@
 import * as ort from 'onnxruntime-node';
 import { readFileSync } from 'fs';
+import { dirname, join } from 'path';
+import { fileURLToPath } from 'url';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const THRESHOLD = 0.5;
 
@@ -13,8 +17,8 @@ export class Segmenter {
     }
 
     static async load(
-        modelPath = './model/segmenter.onnx',
-        vocabPath = './model/vocab.json',
+        modelPath = join(__dirname, '../model/segmenter.onnx'),
+        vocabPath = join(__dirname, '../model/vocab.json'),
     ): Promise<Segmenter> {
         const session = await ort.InferenceSession.create(modelPath);
         const vocab   = JSON.parse(readFileSync(vocabPath, 'utf-8')) as string[];
