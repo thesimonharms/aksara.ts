@@ -1,6 +1,6 @@
 {
   "name": "aksara-ts",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "main": "src/aksara.ts",
   "scripts": {
     "test": "bun test",
@@ -8,7 +8,13 @@
     "train-segmenter": "bun run scripts/train-segmenter.ts",
     "demo": "bun run scripts/demo.ts"
   },
-  "keywords": ["javanese", "aksara", "hanacaraka", "transliteration", "typescript"],
+  "keywords": [
+    "javanese",
+    "aksara",
+    "hanacaraka",
+    "transliteration",
+    "typescript"
+  ],
   "author": "thesimonharms <simon@simonharms.com>",
   "license": "MIT",
   "description": "A TypeScript library for converting Latin-script Javanese text into Aksara Jawa (Hanacaraka).",
