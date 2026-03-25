@@ -23,6 +23,10 @@ src/scratchpad.ts
 # Large text dumps — obtain separately (see README)
 training/jv_plain.txt
 training/javanese_aksara.txt
+data/jv.txt
+
+# Root-level LM if generated outside training/
+javanese_lm.pkl
 
 # Manuscript scans
 training/*.pdf
@@ -43,6 +47,9 @@ training/javanese_lm.pkl
 training/*.pth
 model/*.pt
 model/*.pth
+
+# Human-labeled HITL data — local only, not for distribution
+training/human_labeled/
 
 # ONNX exports land in model/ (committed); ignore any built inside training/
 training/*.onnx
