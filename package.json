@@ -6,7 +6,8 @@
     "test": "bun test",
     "build": "tsc",
     "train-segmenter": "bun run scripts/train-segmenter.ts",
-    "demo": "bun run scripts/demo.ts"
+    "demo": "bun run scripts/demo.ts",
+    "keyboard": "bun run keyboard.ts"
   },
   "keywords": [
     "javanese",

@@ -3,3 +3,7 @@ onnx
 onnxruntime
 onnxscript
 numpy
+torchvision
+torchaudio
+pillow
+pdf2image

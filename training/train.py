@@ -24,6 +24,7 @@ from torch.utils.data import DataLoader, Dataset
 
 # ─── Device: AMD GPU via DirectML, CUDA, or CPU ──────────────────────────────
 
+# DirectML does not support the fused LSTM kernel; segmenter trains fast on CPU anyway.
 if torch.cuda.is_available():
     device = torch.device("cuda")
     print(f"Device: CUDA ({torch.cuda.get_device_name(0)})")
@@ -115,7 +116,10 @@ class SegmenterModel(nn.Module):
 
     def forward(self, x, lengths=None):
         emb = self.drop(self.embedding(x))
-        if lengths is not None:
+        # pack_padded_sequence uses a fused LSTM kernel not supported by DirectML;
+        # skip packing on non-CUDA/CPU devices — minor efficiency cost, same result.
+        use_packing = lengths is not None and str(x.device) in ("cpu", "cuda")
+        if use_packing:
             packed      = pack_padded_sequence(emb, lengths.cpu(), batch_first=True, enforce_sorted=False)
             out, _      = self.lstm(packed)
             out, _      = pad_packed_sequence(out, batch_first=True)
@@ -214,6 +218,7 @@ torch.onnx.export(
         "logits": {0: "batch", 1: "seq_len"},
     },
     opset_version=17,
+    dynamo=False,
 )
 
 print("Saved: model/segmenter.onnx")
