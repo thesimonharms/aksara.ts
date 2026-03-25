@@ -7,7 +7,7 @@
     "build": "tsc",
     "train-segmenter": "bun run scripts/train-segmenter.ts",
     "demo": "bun run scripts/demo.ts",
-    "keyboard": "bun run keyboard.ts"
+    "keyboard": "bun run scripts/keyboard.ts"
   },
   "keywords": [
     "javanese",
