@@ -31,6 +31,15 @@ bun add aksara-ts
 npm install aksara-ts
 ```
 
+The npm package includes the pre-compiled JavaScript in `dist/`. To build from source:
+
+```bash
+git clone <repo>
+cd aksara.ts
+bun install
+bun run build    # TypeScript compile
+```
+
 ## Usage
 
 ### Forward: Latin → Aksara
@@ -44,6 +53,35 @@ new Aksara('wong jawa').getAksara();         // → 'ꦮꦺꦴꦁꦗꦮ'
 new Aksara('kra').getAksara();               // → 'ꦏꦿ'   (cakra for medial r)
 new Aksara('1234').getAksara();              // → '꧑꧒꧓꧔'  (Javanese numerals)
 new Aksara('aksara', false, true).getAksara(); // → 'ꦄꦏ꧀ꦱꦫ' (explicit vowel letters)
+
+### Murda (prestige) consonants
+
+Uppercase Latin letters automatically map to Murda consonant forms in the forward direction:
+
+```typescript
+new Aksara('Surabaya').getAksara();  // → 'ꦯꦸꦫꦧꦪ' (Sa Murda)
+new Aksara('K');                      // → 'ꦑ'      (Ka Murda)
+new Aksara('Ra');                     // → 'ꦬ'      (Ra Agung)
+```
+
+Ten consonants have Murda forms:
+
+| Latin | Murda form | Name |
+|-------|-----------|------|
+| `K`/`k` | ꦑ | Ka Murda |
+| `G`/`g` | ꦓ | Ga Murda |
+| `N`/`n` | ꦟ | Na Murda |
+| `P`/`p` | ꦦ | Pa Murda |
+| `S`/`s` | ꦯ | Sa Murda |
+| `R`/`r` | ꦬ | Ra Agung |
+| `B`/`b` | ꦨ | Ba Murda |
+| `T`/`t` | ꦡ | Ta Murda |
+| `C`/`c` | ꦖ | Ca Murda |
+| `Ny`/`ny` | ꦘ | Nya Murda |
+
+Consonants without a Murda form use the regular aksara regardless of case. Vowel case has no effect. In wyanjana (pasangan) position, standard subscript forms are always used — Murda only applies to initial position.
+
+This notation is the default mechanism for producing Murda output. It is deliberately simple — if a future API needs a different convention, the underlying `murdaConsonantAksara` map can be extended or overridden.
 ```
 
 ### Reverse: Aksara → Latin
@@ -200,17 +238,19 @@ Training data sourced from OPUS:
 ## Development
 
 ```bash
-bun test       # 77 tests
-bun run build  # TypeScript compile
+bun test       # 90 tests (see below for test breakdown)
+bun run build  # TypeScript compile → dist/
 bun run demo   # end-to-end pipeline demo
 ```
 
 ## Roadmap
 
+- [x] **Fix the build + packaging** — TypeScript compiles cleanly to CommonJS; `package.json` configured for npm publishing with `dist/` entry points and proper `exports` map
+- [x] **Murda consonants in forward direction** — uppercase Latin letters select Murda (prestige) forms; six consonants supported
 - [ ] **Retrain segmenter on broader data** — current model was trained on software localisation strings; needs exposure to natural prose and poetic/classical vocabulary to handle manuscript text reliably
 - [ ] **Structured token output** — expose syllable boundaries, punctuation names, and verse markers as typed tokens for RAG and embedding pipelines
 - [ ] **Unicode normalisation** — OCR output uses inconsistent codepoint sequences for the same glyph; a normalisation pass is a prerequisite for reliable decoding
-- [ ] **Murda consonants in forward direction** — currently decode-only; forward support requires a notation convention for the input
+- [ ] **OCR inference in TypeScript** — the ONNX OCR model exists but has no TypeScript API; adding it would complete the preservation pipeline
 - [ ] **OCR pipeline integration** — end-to-end example connecting an OCR engine to this library and a language model
 
 ## License
