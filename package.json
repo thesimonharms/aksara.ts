@@ -1,10 +1,30 @@
 {
   "name": "aksara-ts",
-  "version": "2.0.1",
-  "main": "src/aksara.ts",
+  "version": "2.1.0",
+  "main": "dist/aksara.js",
+  "types": "dist/aksara.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/aksara.js",
+      "require": "./dist/aksara.js",
+      "types": "./dist/aksara.d.ts"
+    },
+    "./segmenter": {
+      "import": "./dist/segmenter.js",
+      "require": "./dist/segmenter.js",
+      "types": "./dist/segmenter.d.ts"
+    }
+  },
+  "files": [
+    "dist/",
+    "model/",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "test": "bun test",
     "build": "tsc",
+    "prepare": "npm run build",
     "train-segmenter": "bun run scripts/train-segmenter.ts",
     "demo": "bun run scripts/demo.ts",
     "keyboard": "bun run scripts/keyboard.ts"
@@ -18,7 +38,7 @@
   ],
   "author": "thesimonharms <simon@simonharms.com>",
   "license": "MIT",
-  "description": "A TypeScript library for converting Latin-script Javanese text into Aksara Jawa (Hanacaraka).",
+  "description": "A TypeScript library for converting Latin-script Javanese text into Aksara Jawa (Hanacaraka) — bidirectional transliteration, Murda consonants, and neural word segmentation.",
   "devDependencies": {
     "typescript": "^5.4.5"
   },
