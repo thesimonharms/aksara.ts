@@ -245,13 +245,13 @@ bun run demo   # end-to-end pipeline demo
 
 ## Roadmap
 
-- [x] **Fix the build + packaging** — TypeScript compiles cleanly to CommonJS; `package.json` configured for npm publishing with `dist/` entry points and proper `exports` map
-- [x] **Murda consonants in forward direction** — uppercase Latin letters select Murda (prestige) forms; six consonants supported
-- [ ] **Retrain segmenter on broader data** — current model was trained on software localisation strings; needs exposure to natural prose and poetic/classical vocabulary to handle manuscript text reliably
-- [ ] **Structured token output** — expose syllable boundaries, punctuation names, and verse markers as typed tokens for RAG and embedding pipelines
-- [ ] **Unicode normalisation** — OCR output uses inconsistent codepoint sequences for the same glyph; a normalisation pass is a prerequisite for reliable decoding
-- [ ] **OCR inference in TypeScript** — the ONNX OCR model exists but has no TypeScript API; adding it would complete the preservation pipeline
-- [ ] **OCR pipeline integration** — end-to-end example connecting an OCR engine to this library and a language model
+The full, phased implementation plan lives in **[ROADMAP.md](./ROADMAP.md)** — that file is the canonical source of truth for what's shipped, what's next, and how each item is verified.
+
+**Shipped (commit `e7031f3`):** bidirectional Latin ↔ Aksara transliteration, Murda consonants, neural word segmenter with ONNX export, 90-test suite, npm packaging.
+
+**Next up (Phase 1, 1–2 weeks):** TypeScript OCR runtime, end-to-end OCR → `fromAksara` → segmenter demo, fix the incomplete `training/setup.bat`, audit the OCR alphabet against `fromAksara`'s glyph coverage.
+
+**Planned:** structured token output, Unicode normalisation, prose-trained segmenter, LM-assisted `ꦲ` disambiguation, self-training loop on real manuscripts, single canonical ONNX location, CI, browser build.
 
 ## License
 
