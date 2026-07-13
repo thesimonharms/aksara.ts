@@ -26,6 +26,7 @@ export interface OcrRecognizeOptions {
   lmWeight?: number;
   tileWidth?: number;
   tileHeight?: number;
+  fullLine?: boolean;
 }
 
 export interface OcrTileResult {
@@ -114,18 +115,23 @@ export class OcrModel {
     const lmWeight = options.lmWeight ?? 0.5;
 
     const greyscale = this.toGreyscale(image);
-    const tiles = this.tileImage(greyscale, tileWidth, tileHeight);
+    const tiles = options.fullLine
+      ? this.prepareFullLine(greyscale, tileHeight)
+      : this.tileImage(greyscale, tileWidth, tileHeight).map((data) => ({
+          data,
+          width: tileWidth,
+          height: tileHeight,
+        }));
 
     const tileResults: OcrTileResult[] = [];
     for (const tile of tiles) {
-      const result = await this.recognizeTile(tile, tileWidth, tileHeight, {
+      const result = await this.recognizeTile(tile.data, tile.width, tile.height, {
         lm,
         beamWidth,
         lmWeight,
       });
       tileResults.push(result);
     }
-
     const fullText = tileResults.map((t) => t.text).join("");
     const meanConfidence =
       tileResults.length > 0
@@ -232,6 +238,31 @@ export class OcrModel {
       tiles.push(tile);
     }
     return tiles;
+  }
+
+  private prepareFullLine(
+    greyscale: { width: number; height: number; data: Float32Array },
+    tileHeight: number,
+  ): Array<{ data: Float32Array; width: number; height: number }> {
+    const scale = tileHeight / greyscale.height;
+    const scaledWidth = Math.max(32, Math.round(greyscale.width * scale));
+    const targetWidth = Math.max(32, Math.ceil(scaledWidth / 4) * 4);
+    const scaled = resizeGreyscale(
+      greyscale.data,
+      greyscale.width,
+      greyscale.height,
+      scaledWidth,
+      tileHeight,
+    );
+
+    const data = new Float32Array(targetWidth * tileHeight);
+    data.fill(255.0);
+    for (let y = 0; y < tileHeight; y++) {
+      for (let x = 0; x < scaledWidth; x++) {
+        data[y * targetWidth + x] = scaled[y * scaledWidth + x];
+      }
+    }
+    return [{ data, width: targetWidth, height: tileHeight }];
   }
 
   private async recognizeTile(

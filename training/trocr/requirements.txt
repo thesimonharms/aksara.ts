@@ -1,0 +1,25 @@
+# Fine-tuning TrOCR for Javanese Aksara OCR.
+# Pin ranges that work with the Seq2SeqTrainer + VisionEncoderDecoderModel path.
+#
+# Local (DirectML):     uv pip install --python <venv> -r training/trocr/requirements.txt
+# In HF Space (CUDA):   installed by space/requirements.txt (uses plain `torch` w/ CUDA wheels).
+
+# Core
+transformers>=4.46,<5.0
+datasets>=2.20
+accelerate>=0.34
+evaluate>=0.4
+sentencepiece>=0.2.0
+python-dotenv>=1.0
+
+# Metric: character error rate (depends on jiwer)
+jiwer>=3.0
+
+# Vision deps already used by the dataset generator
+pillow>=10.0
+PyMuPDF>=1.24
+
+# NOTE: PyTorch must be installed separately to match your backend:
+#   DirectML (AMD/Intel):  uv pip install torch torch-directml
+#   CUDA:                  pip install torch --index-url https://download.pytorch.org/whl/cu121
+#   CPU:                   pip install torch --index-url https://download.pytorch.org/whl/cpu

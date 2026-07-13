@@ -30,9 +30,9 @@ Build a `src/ocr.ts` module that mirrors the structure of `src/segmenter.ts`:
 - `model.recognize(image: ImageData | Buffer, options?)` — runs the pre-processing pipeline (greyscale → resize to 128×32 → tile if wider → CTC greedy decode by default) and returns `{ text: string, confidence: number, tiles: { text, confidence }[] }`.
 - Add an entry in `package.json#exports` for `"./ocr"`.
 - Expose the same `IMAGENET`-style normalisation the training script uses (`arr / 255.0`, single channel, shape `[1, 1, 32, 128]`).
-- Accept a `CharNgramLM`-equivalent for shallow fusion, or stub it for v1 (LM in TS = port of `CharNgramLM` from `training/javanese_ocr.py:171–223`; small class, ~50 LOC).
+- Accept a `CharNgramLM`-equivalent for shallow fusion, or stub it for v1 (LM in TS = port of `CharNgramLM` from `training/crnn/javanese_ocr.py:171–223`; small class, ~50 LOC).
 
-**Acceptance:** `bun run scripts/ocr-demo.ts path/to/manuscript_page.png` prints line-by-line decoded Aksara. The output is non-empty and matches the model output from `python training/javanese_ocr.py --mode predict` to ≥ 90% of characters on a held-out test image.
+**Acceptance:** `bun run scripts/ocr-demo.ts path/to/manuscript_page.png` prints line-by-line decoded Aksara. The output is non-empty and matches the model output from `python training/crnn/javanese_ocr.py --mode predict` to ≥ 90% of characters on a held-out test image.
 
 **Touches:** `src/ocr.ts` (new), `package.json`, `scripts/ocr-demo.ts` (new).
 
@@ -59,13 +59,13 @@ The setup script is incomplete: it installs `torch`, `onnx`, `onnxruntime`, `num
 - Same for `training.sh` if it has the same gap.
 - Add a post-install check that prints `python -c "import fitz, PIL, torch, onnxruntime"` and exits non-zero on failure.
 
-**Acceptance:** on a clean venv, `setup.bat && python training/javanese_ocr.py --mode train_lm --corpus training/jv_plain.txt --output_path training/javanese_lm.pkl` succeeds end to end.
+**Acceptance:** on a clean venv, `setup.bat && python training/crnn/javanese_ocr.py --mode train_lm --corpus training/jv_plain.txt --output_path training/javanese_lm.pkl` succeeds end to end.
 
 **Touches:** `training/setup.bat`, `training.sh` if applicable.
 
 ### 1.4 Verify and document the OCR alphabet
 
-`training/javanese_ocr.py:85` defines:
+`training/crnn/javanese_ocr.py:85` defines:
 
 ```python
 JAVANESE_CHARS = [chr(i) for i in range(0xA98F, 0xA9C1)]
@@ -80,11 +80,19 @@ If accuracy is low, either (a) regenerate synthetic data with more pengkal, or (
 
 **Acceptance:** a written note in the repo (could be in `ROADMAP.md` or a new `model/MODEL_CARD.md`) describing what the OCR can and cannot decode.
 
-**Touches:** `training/javanese_ocr.py` (regen threshold or filter), `model/MODEL_CARD.md` (new).
+**Touches:** `training/crnn/javanese_ocr.py` (regen threshold or filter), `model/MODEL_CARD.md` (new).
 
 ---
 
 ## Phase 2 — Improve OCR accuracy (2–4 weeks)
+
+> **Update:** Items 2.1, 2.2, and 2.4 are addressed by the new TrOCR fine-tune
+> pipeline in `training/trocr/` — see [`training/trocr/README.md`](./training/trocr/README.md).
+> That pipeline replaces the two-font / single-PDF synthetic approach with a
+> multi-font + multi-PDF generator, adds a HITL labeler for real handwriting
+> (`label_pdfs.py`), and publishes the fine-tuned model to HF Hub from a
+> Docker-equipped HF Space. The CRNN scripts remain in `training/crnn/` for
+> reference. The items below are kept for historical context.
 
 The current model is trained on synthetic data rendered with two fonts. Real manuscripts have ink bleed, parchment texture, ligature variance, and scribal idiosyncrasies. Self-training on real material closes most of the gap.
 
@@ -109,11 +117,11 @@ The `generate_from_corpus` mode samples backgrounds from a single PDF (`training
 
 **Acceptance:** retrained model improves character accuracy on a held-out manuscript page by ≥ 5% over the current `javanese_ocr.onnx`.
 
-**Touches:** `training/javanese_ocr.py`, `training/data/` (new, holds extra PDFs).
+**Touches:** `training/crnn/javanese_ocr.py`, `training/data/` (new, holds extra PDFs).
 
 ### 2.3 Wire the language model into the TS runtime
 
-Port `CharNgramLM` (`javanese_ocr.py:171–223`) to TypeScript. The class is small: a `Map<string, Map<string, number>>` of context → char → count, plus a Laplace smoothing term. Provide it as `src/lm.ts` and accept it via `OcrModel.recognize({ lm })` to enable shallow-fusion beam search.
+Port `CharNgramLM` (`crnn/javanese_ocr.py:171–223`) to TypeScript. The class is small: a `Map<string, Map<string, number>>` of context → char → count, plus a Laplace smoothing term. Provide it as `src/lm.ts` and accept it via `OcrModel.recognize({ lm })` to enable shallow-fusion beam search.
 
 **Acceptance:** with LM weight 0.5, OCR output on a degraded manuscript sample is ≥ 10% more accurate (edit distance) than greedy decoding.
 
@@ -129,7 +137,7 @@ Port `CharNgramLM` (`javanese_ocr.py:171–223`) to TypeScript. The class is sma
 
 **Acceptance:** `ls model/` shows exactly `segmenter.onnx`, `javanese_ocr.onnx`, `vocab.json`, plus external data files. No ONNX files anywhere in `training/`.
 
-**Touches:** `training/javanese_ocr.py`, `training/export.py`, `.gitignore`, `model/`.
+**Touches:** `training/crnn/javanese_ocr.py`, `training/export.py`, `.gitignore`, `model/`.
 
 ---
 

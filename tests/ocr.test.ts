@@ -84,4 +84,20 @@ describe("OcrModel", () => {
     expect(typeof result.confidence).toBe("number");
     expect(result.tiles.length).toBe(1);
   });
+  test("should recognize variable-width ImageData using fullLine option", async () => {
+    const model = await OcrModel.load();
+    const imgData = {
+      width: 256,
+      height: 32,
+      data: new Uint8Array(256 * 32 * 4).fill(255),
+    };
+
+    const result = await model.recognize(imgData, {
+      fullLine: true,
+    });
+    expect(result).toHaveProperty("text");
+    expect(typeof result.text).toBe("string");
+    expect(typeof result.confidence).toBe("number");
+    expect(result.tiles.length).toBe(1);
+  });
 });

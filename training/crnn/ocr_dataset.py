@@ -5,7 +5,8 @@ from pathlib import Path
 from typing import List, Tuple
 
 import torch
-from PIL import Image
+import random
+from PIL import Image, ImageEnhance
 from torch.utils.data import Dataset
 
 # The same alphabet used by the model (blank token + Javanese characters)
@@ -25,22 +26,29 @@ class OcrDataset(Dataset):
     matching .txt file containing the exact string of Javanese characters.
     """
 
-    def __init__(self, data_dir: Path):
+    def __init__(self, data_dir: Path, augment: bool = False):
         self.data_dir = Path(data_dir)
+        self.augment = augment
         # Collect all PNGs; ensure a corresponding .txt exists
         self.samples: List[Tuple[Path, Path]] = []
         for img_path in sorted(self.data_dir.glob("*.png")):
             txt_path = img_path.with_suffix(".txt")
             if txt_path.is_file():
                 self.samples.append((img_path, txt_path))
-
     def __len__(self) -> int:
         return len(self.samples)
 
     def __getitem__(self, idx: int):
         img_path, txt_path = self.samples[idx]
         image = Image.open(img_path).convert("L")  # grayscale
+        if self.augment:
+            if random.random() < 0.5:
+                image = ImageEnhance.Contrast(image).enhance(random.uniform(0.75, 1.3))
+            if random.random() < 0.5:
+                image = ImageEnhance.Brightness(image).enhance(random.uniform(0.85, 1.15))
+            if random.random() < 0.3:
+                angle = random.uniform(-2.5, 2.5)
+                image = image.rotate(angle, resample=Image.BILINEAR, fillcolor=255)
         label_text = txt_path.read_text(encoding="utf-8")
         labels = torch.tensor(text_to_indices(label_text), dtype=torch.long)
-
         return image, labels

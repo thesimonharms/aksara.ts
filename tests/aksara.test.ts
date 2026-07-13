@@ -77,9 +77,10 @@ describe("Aksara", () => {
     expect(aksara.getAksara()).toBe("ꦫꦸꦮꦶꦁ");
   });
 
-  test("should handle words with wyanjana", () => {
+  test("should handle words with wyanjana using pengkal", () => {
     const aksara = new Aksara("wyanjana");
-    expect(aksara.getAksara()).toBe("ꦮ꧀ꦪꦤ꧀ꦗꦤ");
+    expect(aksara.getAksara()).toBe("ꦮꦾꦤ꧀ꦗꦤ");
+    expect(Aksara.fromAksara("ꦮꦾꦤ꧀ꦗꦤ")).toBe("wyanjana");
   });
 
   test("uppercase letters select Murda (prestige) consonant forms", () => {

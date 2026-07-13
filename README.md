@@ -235,6 +235,22 @@ Training data sourced from OPUS:
 
 > J. Tiedemann, 2012, *Parallel Data, Tools and Interfaces in OPUS*. In Proceedings of the 8th International Conference on Language Resources and Evaluation (LREC 2012).
 
+
+### TrOCR Fine-tuning (Javanese Aksara OCR)
+
+The current recommended OCR training path fine-tunes `microsoft/trocr-base-handwritten`
+via HuggingFace `Seq2SeqTrainer` (AutoTrain Advanced is deprecated and never
+supported VisionEncoderDecoder tasks). Training runs on a rented HF Space T4
+GPU (~$0.40/run on a $10 credit budget).
+
+**Pipeline:** synthetic dataset generation from fonts + PDFs → optional
+human-in-the-loop labeling of real manuscript strips → fine-tune → push to
+HF Hub.
+
+See **[training/trocr/README.md](./training/trocr/README.md)** for the
+complete guide, including the HITL labeler (`label_pdfs.py`) and HF Space
+Docker config (`training/trocr/space/`).
+
 ## Development
 
 ```bash
@@ -247,11 +263,11 @@ bun run demo   # end-to-end pipeline demo
 
 The full, phased implementation plan lives in **[ROADMAP.md](./ROADMAP.md)** — that file is the canonical source of truth for what's shipped, what's next, and how each item is verified.
 
-**Shipped (commit `e7031f3`):** bidirectional Latin ↔ Aksara transliteration, Murda consonants, neural word segmenter with ONNX export, 90-test suite, npm packaging.
+**Shipped:** bidirectional Latin ↔ Aksara transliteration, Murda consonants, neural word segmenter with ONNX export, 90-test suite, npm packaging, TypeScript OCR runtime, CharNgramLM, E2E demo.
 
-**Next up (Phase 1, 1–2 weeks):** TypeScript OCR runtime, end-to-end OCR → `fromAksara` → segmenter demo, fix the incomplete `training/setup.bat`, audit the OCR alphabet against `fromAksara`'s glyph coverage.
+**Shipped (Phase 2 — OCR accuracy):** TrOCR fine-tune pipeline (`training/trocr/`) with synthetic dataset generator (multi-font + multi-PDF), HITL manuscript labeler (`label_pdfs.py`), `Seq2SeqTrainer` fine-tuning script, and HF Space Docker config for T4 GPU training. CRNN pipeline retained in `training/crnn/`.
 
-**Planned:** structured token output, Unicode normalisation, prose-trained segmenter, LM-assisted `ꦲ` disambiguation, self-training loop on real manuscripts, single canonical ONNX location, CI, browser build.
+**Next up:** structured token output, Unicode normalisation, prose-trained segmenter, LM-assisted `ꦲ` disambiguation, CI, browser build.
 
 ## License
 

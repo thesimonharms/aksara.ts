@@ -156,7 +156,7 @@ if [[ $RUN_OCR -eq 1 ]]; then
 
     LM="$TRAINING/javanese_lm.pkl"
     if ! exists "$LM"; then
-        "$PY" "$TRAINING/javanese_ocr.py" \
+        "$PY" "$TRAINING/crnn/javanese_ocr.py" \
             --mode        train_lm \
             --corpus      "$AKSARA_CORPUS" \
             --output_path "$LM"
@@ -174,7 +174,7 @@ if [[ $RUN_OCR -eq 1 ]]; then
         BG_ARG=""
         [[ -f "$TRAINING/PDFA.pdf" ]] && BG_ARG="--background_pdf $TRAINING/PDFA.pdf"
         # shellcheck disable=SC2086
-        "$PY" "$TRAINING/javanese_ocr.py" \
+        "$PY" "$TRAINING/crnn/javanese_ocr.py" \
             --mode        generate_from_corpus \
             --corpus      "$AKSARA_CORPUS" \
             --data_dir    "$OCR_CORPUS" \
@@ -195,7 +195,7 @@ if [[ $RUN_OCR -eq 1 ]]; then
     [[ ${#DATA_DIRS[@]} -eq 0 ]] && die "No OCR training data found in training/"
 
     OCR_PTH="$TRAINING/javanese_ocr.pth"
-    "$PY" "$TRAINING/javanese_ocr.py" \
+    "$PY" "$TRAINING/crnn/javanese_ocr.py" \
         --mode        train \
         --data_dir    "${DATA_DIRS[@]}" \
         --epochs      50 \
@@ -206,7 +206,7 @@ if [[ $RUN_OCR -eq 1 ]]; then
     # -- Export OCR model to ONNX -------------------------------------------
     step "Exporting OCR model to ONNX"
 
-    "$PY" "$TRAINING/javanese_ocr.py" \
+    "$PY" "$TRAINING/crnn/javanese_ocr.py" \
         --mode        export_onnx \
         --model_path  "$OCR_PTH" \
         --output_path "$MODEL_DIR/javanese_ocr.onnx"
@@ -223,6 +223,6 @@ echo ""
 echo ""
 if [[ $RUN_OCR -eq 1 ]]; then
     echo "Test OCR:"
-    echo "  cd training && python javanese_ocr.py --mode predict \\"
+    echo "  cd training/crnn && python javanese_ocr.py --mode predict \\"
     echo "      --pdf PDFA.pdf --lm_path javanese_lm.pkl --beam_width 10"
 fi

@@ -1,0 +1,15 @@
+# HF Space (CUDA T4) requirements for the Javanese TrOCR fine-tune pipeline.
+# PyTorch CUDA wheels via the extra index line below.
+--extra-index-url https://download.pytorch.org/whl/cu121
+
+transformers>=4.46,<5.0
+datasets>=2.20
+accelerate>=0.34
+evaluate>=0.4
+jiwer>=3.0
+sentencepiece>=0.2.0
+python-dotenv>=1.0
+pillow>=10.0
+PyMuPDF>=1.24
+gradio>=4.44
+torch==2.5.1

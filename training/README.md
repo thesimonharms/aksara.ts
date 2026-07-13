@@ -1,6 +1,15 @@
 # Aksara.ts Training & Self-Supervised OCR Pipeline
 
-This directory contains the training and self-supervised pseudo-labelling pipeline for `aksara-ts`, including the neural word segmenter and the CRNN optical character recognition (OCR) model.
+This directory contains the training pipeline for `aksara.ts`, including:
+
+- **Javanese Aksara OCR** — the new TrOCR fine-tune pipeline (`trocr/`)
+- **Word segmenter** — BiLSTM model exported to ONNX (`train.py`, `export.py`)
+- **CRNN + CTC OCR** — the legacy self-supervised pseudo-labelling loop (`crnn/`)
+
+See [`trocr/README.md`](./trocr/README.md) for the current recommended OCR
+training path (HuggingFace `Seq2SeqTrainer` on `microsoft/trocr-base-handwritten`,
+run on a HF Space T4 GPU). The CRNN pipeline below is kept for reference and
+still works via `training.sh` / `training.ps1`.
 
 ---
 
@@ -45,7 +54,7 @@ Real Javanese manuscripts vary widely in ink bleed, parchment texture, ligature 
 ### Step 1: Generate Synthetic Training Data (`generate_from_corpus`)
 Renders synthetic line strips from plain Javanese Aksara corpus text using real manuscript background textures (`PDFA.pdf` or custom scans).
 ```bash
-python training/javanese_ocr.py --mode generate_from_corpus \
+python training/crnn/javanese_ocr.py --mode generate_from_corpus \
   --corpus training/javanese_aksara.txt \
   --background_pdf training/PDFA.pdf \
   --data_dir ./ocr_corpus \
@@ -56,7 +65,7 @@ python training/javanese_ocr.py --mode generate_from_corpus \
 ### Step 2: Train Character N-Gram Language Model (`train_lm`)
 Trains a character-level 3-gram model with Laplace smoothing for shallow fusion during CTC beam search.
 ```bash
-python training/javanese_ocr.py --mode train_lm \
+python training/crnn/javanese_ocr.py --mode train_lm \
   --corpus training/javanese_aksara.txt \
   --output_path training/javanese_lm.pkl
 ```
@@ -64,7 +73,7 @@ python training/javanese_ocr.py --mode train_lm \
 ### Step 3: Train Initial Acoustic Model (`train`)
 Trains the CRNN checkpoint (`javanese_ocr.pth`) on synthetic strips.
 ```bash
-python training/javanese_ocr.py --mode train \
+python training/crnn/javanese_ocr.py --mode train \
   --data_dir ./ocr_corpus \
   --epochs 20 \
   --lr 0.001
@@ -73,7 +82,7 @@ python training/javanese_ocr.py --mode train \
 ### Step 4: Ingest Unlabeled Manuscript Scans (`ingest`)
 Segments raw manuscript PDFs or images into normalized $128 \times 32$ greyscale line strips.
 ```bash
-python training/javanese_ocr.py --mode ingest \
+python training/crnn/javanese_ocr.py --mode ingest \
   --input_dir ./manuscripts \
   --data_dir ./manuscript_strips
 ```
@@ -81,7 +90,7 @@ python training/javanese_ocr.py --mode ingest \
 ### Step 5: Auto-Label High-Confidence Strips (`pseudo_label`)
 Runs the trained CRNN with LM-assisted beam search on unlabelled strips. Strips exceeding confidence threshold (`--threshold 0.92`) are copied alongside generated `.txt` labels.
 ```bash
-python training/javanese_ocr.py --mode pseudo_label \
+python training/crnn/javanese_ocr.py --mode pseudo_label \
   --unlabeled_dir ./manuscript_strips \
   --data_dir ./pseudo_labeled \
   --lm_path training/javanese_lm.pkl \
@@ -91,7 +100,7 @@ python training/javanese_ocr.py --mode pseudo_label \
 ### Step 6: Retrain with Expanded Dataset (`train`)
 Retrains the CRNN combining synthetic pre-training data and confident pseudo-labelled real manuscript strips.
 ```bash
-python training/javanese_ocr.py --mode train \
+python training/crnn/javanese_ocr.py --mode train \
   --data_dir ./ocr_corpus ./pseudo_labeled \
   --epochs 25 \
   --output_path training/javanese_ocr.pth
@@ -106,20 +115,20 @@ To produce a functional model from scratch on CPU in under 45 minutes:
 
 ```bash
 # 1. Generate 2,000 synthetic samples (~3 minutes)
-python training/javanese_ocr.py --mode generate_from_corpus \
+python training/crnn/javanese_ocr.py --mode generate_from_corpus \
   --corpus training/javanese_aksara.txt --background_pdf training/PDFA.pdf \
   --data_dir ./ocr_fast --num_samples 2000
 
 # 2. Train 3-gram language model (< 5 seconds)
-python training/javanese_ocr.py --mode train_lm \
+python training/crnn/javanese_ocr.py --mode train_lm \
   --corpus training/javanese_aksara.txt --output_path training/javanese_lm.pkl
 
 # 3. Train CRNN for 10 epochs (~25 minutes on CPU)
-python training/javanese_ocr.py --mode train \
+python training/crnn/javanese_ocr.py --mode train \
   --data_dir ./ocr_fast --epochs 10 --output_path training/javanese_ocr.pth
 
 # 4. Export canonical ONNX artifact to model/javanese_ocr.onnx (< 5 seconds)
-python training/javanese_ocr.py --mode export_onnx \
+python training/crnn/javanese_ocr.py --mode export_onnx \
   --model_path training/javanese_ocr.pth \
   --output_path ../model/javanese_ocr.onnx
 ```

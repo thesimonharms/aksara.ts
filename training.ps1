@@ -153,7 +153,7 @@ if ($RunOcr) {
 
     $LM = Join-Path $Training "javanese_lm.pkl"
     if (-not (Exists $LM)) {
-        & $Py (Join-Path $Training "javanese_ocr.py") `
+        & $Py (Join-Path $Training "crnn\javanese_ocr.py") `
             --mode        train_lm `
             --corpus      $AksaraCorpus `
             --output_path $LM
@@ -172,7 +172,7 @@ if ($RunOcr) {
         $PdfPath = Join-Path $Training "PDFA.pdf"
         if (Test-Path $PdfPath) { $BgArg = @("--background_pdf", $PdfPath) }
 
-        & $Py (Join-Path $Training "javanese_ocr.py") `
+        & $Py (Join-Path $Training "crnn\javanese_ocr.py") `
             --mode        generate_from_corpus `
             --corpus      $AksaraCorpus `
             --data_dir    $OcrCorpus `
@@ -194,7 +194,7 @@ if ($RunOcr) {
     if ($DataDirs.Count -eq 0) { Die "No OCR training data found in training\" }
 
     $OcrPth = Join-Path $Training "javanese_ocr.pth"
-    & $Py (Join-Path $Training "javanese_ocr.py") `
+    & $Py (Join-Path $Training "crnn\javanese_ocr.py") `
         --mode        train `
         --data_dir    @DataDirs `
         --epochs      50 `
@@ -206,7 +206,7 @@ if ($RunOcr) {
     Step "Exporting OCR model to ONNX"
 
     $OcrOnnx = Join-Path $ModelDir "javanese_ocr.onnx"
-    & $Py (Join-Path $Training "javanese_ocr.py") `
+    & $Py (Join-Path $Training "crnn\javanese_ocr.py") `
         --mode        export_onnx `
         --model_path  $OcrPth `
         --output_path $OcrOnnx
@@ -227,6 +227,6 @@ if ($RunOcr) {
 Write-Host ""
 if ($RunOcr) {
     Write-Host "Test OCR:"
-    Write-Host "  cd training && python javanese_ocr.py --mode predict ``"
+    Write-Host "  cd training/crnn && python javanese_ocr.py --mode predict ``"
     Write-Host "      --pdf PDFA.pdf --lm_path javanese_lm.pkl --beam_width 10"
 }
