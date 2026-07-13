@@ -82,6 +82,7 @@ DEVICE = _select_device()
 
 IMAGE_HEIGHT = 32
 IMAGE_WIDTH = 128
+# Note: includes pengkal (U+A9BE) and pangkon (U+A9C0). See model/MODEL_CARD.md for pengkal distribution notes.
 JAVANESE_CHARS = [chr(i) for i in range(0xA98F, 0xA9C1)]  # consonants + HA + sandhangan + pangkon
 ALPHABET = ["[blank]"] + JAVANESE_CHARS  # index 0 = CTC blank token
 NUM_CLASSES = len(ALPHABET)
@@ -89,6 +90,7 @@ ALPHABET_MAP = {i: ch for i, ch in enumerate(ALPHABET)}
 BLANK_IDX = 0
 
 DEFAULT_MODEL_PATH = Path(__file__).parent / "javanese_ocr.pth"
+DEFAULT_ONNX_PATH = Path(__file__).parent.parent / "model" / "javanese_ocr.onnx"
 
 # ---------------------------------------------------------------------------
 # 2. NEURAL NETWORK (CRNN)
@@ -576,7 +578,7 @@ def predict_pdf_first_page(
 
 def export_to_onnx(
     model_path: str | Path = DEFAULT_MODEL_PATH,
-    output_path: str | Path = "javanese_ocr.onnx",
+    output_path: str | Path = DEFAULT_ONNX_PATH,
 ) -> None:
     """
     Export the trained CRNN to ONNX for TypeScript / ONNX Runtime Web.
@@ -700,8 +702,8 @@ def generate_synthetic_data(
 def generate_from_corpus(
     corpus_path: str,
     output_dir: str,
-    num_samples: int = 1000,
-    background_pdf: Optional[str] = None,
+    num_samples: int = 20000,
+    background_pdf: Optional[str | List[str]] = None,
     noise_level: float = 0.0,
     noise_type: str = "gaussian",
 ) -> None:
@@ -753,19 +755,23 @@ def generate_from_corpus(
 
     fonts = _load_fonts()
 
-    # --- Extract background patches at multiple brightness levels ---
+    # --- Extract background patches from one or more PDFs ---
     bg_patches: Optional[List[Image.Image]] = None
     if background_pdf:
-        print(f"Sampling background patches from '{background_pdf}'...")
-        bg_patches = extract_background_patches(
-            background_pdf, num_patches=min(4000, num_samples)
-        )
+        pdf_list = [background_pdf] if isinstance(background_pdf, (str, Path)) else background_pdf
+        bg_patches = []
+        per_pdf = max(1000, num_samples // max(1, len(pdf_list)))
+        for pdf_path in pdf_list:
+            if not Path(pdf_path).exists():
+                continue
+            print(f"Sampling background patches from '{pdf_path}'...")
+            patches = extract_background_patches(str(pdf_path), num_patches=min(4000, per_pdf))
+            bg_patches.extend(patches)
         if bg_patches:
-            print(f"  Got {len(bg_patches)} usable patches.")
+            print(f"  Got {len(bg_patches)} usable patches across {len(pdf_list)} PDF source(s).")
         else:
             print("  Warning: no usable patches found - using white backgrounds.")
             bg_patches = None
-
     os.makedirs(output_dir, exist_ok=True)
     print(f"Generating {num_samples} corpus-based samples in '{output_dir}'...")
 
@@ -797,7 +803,7 @@ def generate_from_corpus(
 
         # --- Font & size ---
         font_path = fonts[i % len(fonts)]
-        font_size = random.randint(16, 28)
+        font_size = random.randint(14, 30)
         try:
             font = ImageFont.truetype(str(font_path), size=font_size)
         except OSError:
@@ -808,7 +814,7 @@ def generate_from_corpus(
         y_off = random.randint(0, max(0, IMAGE_HEIGHT - font_size - 2))
 
         # --- Ink colour (near-black to faded brown) ---
-        ink = random.randint(8, 60)
+        ink = random.randint(5, 85)
 
         ImageDraw.Draw(img).text((x_off, y_off), chunk, font=font, fill=ink)
 
@@ -845,6 +851,12 @@ def generate_from_corpus(
             from PIL import ImageEnhance
             factor = random.uniform(0.6, 1.5)
             img = ImageEnhance.Contrast(img).enhance(factor)
+
+        # Morphological ink bleed / thinning simulation — 20% of samples
+        if random.random() < 0.10:
+            img = img.filter(ImageFilter.MinFilter(3))  # ink spread / bleed
+        elif random.random() < 0.10:
+            img = img.filter(ImageFilter.MaxFilter(3))  # faded / eroded strokes
 
         # Extra noise if caller requested it
         if noise_level > 0:
@@ -1195,8 +1207,8 @@ Recommended improvement workflow (no manual labelling):
     # --- Corpus & LM ---
     parser.add_argument("--corpus",
                         help="Path to UTF-8 Javanese text corpus (generate_from_corpus / train_lm).")
-    parser.add_argument("--background_pdf",
-                        help="PDF to sample manuscript background textures from (generate_from_corpus).")
+    parser.add_argument("--background_pdf", nargs="+",
+                        help="PDF(s) to sample manuscript background textures from (generate_from_corpus).")
     parser.add_argument("--lm_path",
                         help="Path to trained CharNgramLM .pkl file (predict / pseudo_label).")
     parser.add_argument("--lm_n", type=int, default=3,
@@ -1207,8 +1219,8 @@ Recommended improvement workflow (no manual labelling):
                         help="LM score weight for beam search (0=CTC only, 1=equal). Default: 0.5.")
 
     # --- Generation ---
-    parser.add_argument("--num_samples", type=int, default=1000,
-                        help="Synthetic samples to generate. Default: 1000.")
+    parser.add_argument("--num_samples", type=int, default=20000,
+                        help="Synthetic samples to generate. Default: 20000.")
     parser.add_argument("--noise_level", type=float, default=0.0,
                         help="Noise intensity (0–100). Default: 0.")
     parser.add_argument("--noise_type", choices=["gaussian", "salt_pepper", "blur"],
@@ -1246,7 +1258,7 @@ Recommended improvement workflow (no manual labelling):
         )
 
     elif args.mode == "export_onnx":
-        out = args.output_path if args.output_path.endswith(".onnx") else "javanese_ocr.onnx"
+        out = args.output_path if args.output_path.endswith(".onnx") else DEFAULT_ONNX_PATH
         export_to_onnx(model_path=args.model_path, output_path=out)
 
     elif args.mode == "generate":

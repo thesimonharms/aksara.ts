@@ -6,7 +6,18 @@ call training\venv\Scripts\activate
 echo.
 echo Installing PyTorch and dependencies...
 pip install torch --index-url https://download.pytorch.org/whl/cpu
-pip install onnx onnxruntime numpy
+pip install onnx onnxruntime numpy pymupdf pillow torchvision
+if exist training\requirements.txt (
+  pip install -r training\requirements.txt
+)
+
+echo.
+echo Verifying installation...
+python -c "import fitz, PIL, torch, onnxruntime; print('Post-install check passed: all required modules imported successfully.')"
+if %ERRORLEVEL% NEQ 0 (
+  echo [ERROR] Post-install check failed!
+  exit /b 1
+)
 
 echo.
 echo Done.

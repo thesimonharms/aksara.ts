@@ -13,6 +13,16 @@
       "import": "./dist/segmenter.js",
       "require": "./dist/segmenter.js",
       "types": "./dist/segmenter.d.ts"
+    },
+    "./ocr": {
+      "import": "./dist/ocr.js",
+      "require": "./dist/ocr.js",
+      "types": "./dist/ocr.d.ts"
+    },
+    "./lm": {
+      "import": "./dist/lm.js",
+      "require": "./dist/lm.js",
+      "types": "./dist/lm.d.ts"
     }
   },
   "files": [
@@ -27,6 +37,8 @@
     "prepare": "npm run build",
     "train-segmenter": "bun run scripts/train-segmenter.ts",
     "demo": "bun run scripts/demo.ts",
+    "ocr-demo": "bun run scripts/ocr-demo.ts",
+    "ocr-llm-demo": "bun run scripts/ocr-llm-demo.ts",
     "keyboard": "bun run scripts/keyboard.ts"
   },
   "keywords": [
@@ -40,9 +52,11 @@
   "license": "MIT",
   "description": "A TypeScript library for converting Latin-script Javanese text into Aksara Jawa (Hanacaraka) — bidirectional transliteration, Murda consonants, and neural word segmentation.",
   "devDependencies": {
+    "@types/pngjs": "^6.0.5",
     "typescript": "^5.4.5"
   },
   "dependencies": {
-    "onnxruntime-node": "^1.24.3"
+    "onnxruntime-node": "^1.24.3",
+    "pngjs": "^7.0.0"
   }
 }

@@ -93,7 +93,8 @@ if [[ -z "$PY" ]]; then
         echo "  Installing PyTorch (CPU)..."
         uv pip install --python "$PY" torch --index-url https://download.pytorch.org/whl/cpu
         echo "  Installing other dependencies..."
-        uv pip install --python "$PY" torch-directml pymupdf -r "$TRAINING/requirements.txt"
+        uv pip install --python "$PY" torch-directml pymupdf pillow torchvision -r "$TRAINING/requirements.txt"
+        "$PY" -c "import fitz, PIL, torch, onnxruntime" || die "Post-install verification failed: missing Python dependencies"
     else
         PYTHON_SYS=""
         command -v python3 &>/dev/null && PYTHON_SYS="python3"
@@ -109,7 +110,8 @@ if [[ -z "$PY" ]]; then
         "$PY" -m pip install -q torch --index-url https://download.pytorch.org/whl/cpu
         echo "  Installing other dependencies..."
         "$PY" -m pip install -q -r "$TRAINING/requirements.txt"
-        "$PY" -m pip install -q pymupdf
+        "$PY" -m pip install -q pymupdf pillow torchvision
+        "$PY" -c "import fitz, PIL, torch, onnxruntime" || die "Post-install verification failed: missing Python dependencies"
     fi
     ok "Virtual environment ready"
 else

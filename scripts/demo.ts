@@ -29,3 +29,7 @@ const words = ['lamun', 'sira', 'nginguk', 'ucing'];
 for (const word of words) {
     console.log(`  ${word.padEnd(10)} → ${new Aksara(word).getAksara()}`);
 }
+
+
+// ── End-to-End OCR → LLM Pipeline ───────────────────────────────────────────
+console.log('\nTip: Run "bun run ocr-llm-demo training/PDFA.pdf" for the full end-to-end OCR → Aksara → Latin → Segmenter → LLM pipeline demo.');

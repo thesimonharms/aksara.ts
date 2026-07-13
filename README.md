@@ -189,7 +189,7 @@ Digits `0`–`9` → `꧐`–`꧙`. Unknown characters pass through unchanged.
 
 ## Training
 
-The word segmenter is trained separately in Python and exported to ONNX for use at runtime.
+The word segmenter and OCR models are trained in Python and exported to ONNX for use at runtime. See **[training/README.md](./training/README.md)** for complete instructions on the 6-step self-supervised OCR training loop.
 
 ### Setup
 
