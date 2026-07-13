@@ -83,7 +83,9 @@ if (-not (Test-Path $Py) -or $Force) {
         uv pip install --python $Py torch --index-url https://download.pytorch.org/whl/cpu
 
         Write-Host "  Installing other dependencies..."
-        uv pip install --python $Py torch-directml pymupdf -r (Join-Path $Training "requirements.txt")
+        uv pip install --python $Py torch-directml pymupdf pillow torchvision -r (Join-Path $Training "requirements.txt")
+        & $Py -c "import fitz, PIL, torch, onnxruntime"
+        if ($LASTEXITCODE -ne 0) { Die "Post-install verification failed: missing Python dependencies" }
     } else {
         $PythonCmd = Get-Command python3 -ErrorAction SilentlyContinue
         if (-not $PythonCmd) { $PythonCmd = Get-Command python -ErrorAction SilentlyContinue }
@@ -99,7 +101,9 @@ if (-not (Test-Path $Py) -or $Force) {
 
         Write-Host "  Installing other dependencies..."
         & $Py -m pip install -q -r (Join-Path $Training "requirements.txt")
-        & $Py -m pip install -q pymupdf
+        & $Py -m pip install -q pymupdf pillow torchvision
+        & $Py -c "import fitz, PIL, torch, onnxruntime"
+        if ($LASTEXITCODE -ne 0) { Die "Post-install verification failed: missing Python dependencies" }
     }
 
     Ok "Virtual environment ready"
