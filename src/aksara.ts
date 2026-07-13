@@ -108,7 +108,7 @@ class Aksara {
   };
 
   // The consonants used when two consonants touch each other.
-  // 'r' uses cakra (ꦿ) — a subscript diacritic specific to medial r — rather than pangkon+ra.
+  // 'r' uses cakra (ꦿ) and 'y' uses pengkal (ꦾ) — subscript diacritics specific to medial r and y — rather than pangkon+ra/ya.
   wyanjanaAksara: { [key: string]: string } = {
     ng: "꧀ꦔ",
     ny: "꧀ꦚ",
@@ -126,7 +126,7 @@ class Aksara {
     l: "꧀ꦭ",
     p: "꧀ꦥ",
     j: "꧀ꦗ",
-    y: "꧀ꦪ",
+    y: "ꦾ",
     m: "꧀ꦩ",
     g: "꧀ꦒ",
     b: "꧀ꦧ",

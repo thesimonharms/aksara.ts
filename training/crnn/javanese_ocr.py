@@ -49,9 +49,10 @@ from typing import Dict, List, Optional, Tuple
 import numpy as np
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import torch.optim as optim
 import fitz  # pymupdf — no poppler required
-from PIL import Image, ImageDraw, ImageFont, ImageFilter
+from PIL import Image, ImageDraw, ImageFont, ImageFilter, ImageEnhance
 from torch.utils.data import DataLoader, Dataset
 
 from ocr_dataset import text_to_indices
@@ -115,19 +116,56 @@ class _PositionalEncoding(nn.Module):
         return self.drop(x)
 
 
+class ONNXMultiheadAttention(nn.Module):
+    def __init__(self, d_model: int, nhead: int):
+        super().__init__()
+        self.in_proj_weight = nn.Parameter(torch.empty(3 * d_model, d_model))
+        self.in_proj_bias = nn.Parameter(torch.empty(3 * d_model))
+        self.out_proj = nn.Linear(d_model, d_model)
+        self.nhead = nhead
+        self.batch_first = True
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        B, T, C = x.shape
+        qkv = F.linear(x, self.in_proj_weight, self.in_proj_bias)
+        q, k, v = qkv.chunk(3, dim=-1)
+        head_dim = C // self.nhead
+        q = q.view(B, T, self.nhead, head_dim).transpose(1, 2)
+        k = k.view(B, T, self.nhead, head_dim).transpose(1, 2)
+        v = v.view(B, T, self.nhead, head_dim).transpose(1, 2)
+        attn = (q @ k.transpose(-2, -1)) * (head_dim ** -0.5)
+        out = (torch.softmax(attn, dim=-1) @ v).transpose(1, 2).reshape(B, T, C)
+        return self.out_proj(out)
+
+
+class ONNXTransformerEncoderLayer(nn.Module):
+    def __init__(self, d_model: int, nhead: int, dim_feedforward: int = 512, dropout: float = 0.1):
+        super().__init__()
+        self.self_attn = ONNXMultiheadAttention(d_model, nhead)
+        self.linear1 = nn.Linear(d_model, dim_feedforward)
+        self.dropout = nn.Dropout(dropout)
+        self.linear2 = nn.Linear(dim_feedforward, d_model)
+        self.norm1 = nn.LayerNorm(d_model)
+        self.norm2 = nn.LayerNorm(d_model)
+        self.dropout1 = nn.Dropout(dropout)
+        self.dropout2 = nn.Dropout(dropout)
+
+    def forward(self, x: torch.Tensor, *args, **kwargs) -> torch.Tensor:
+        x = self.norm1(x + self.dropout1(self.self_attn(x)))
+        x = self.norm2(x + self.dropout2(self.linear2(self.dropout(F.relu(self.linear1(x))))))
+        return x
+
+
 class SimpleCRNN(nn.Module):
     """
-    CNN + Transformer encoder for CTC-based OCR.
-
-    Uses only matmul/softmax ops — no fused LSTM kernel — so it runs natively
-    on DirectML (AMD/Intel GPU via torch-directml).
+    Deep CNN + Transformer encoder for CTC-based OCR.
 
     Architecture:
-        CNN backbone       -> [B, C*H, W/4] feature sequence
-        Linear proj        -> [B, W/4, 256]
-        Positional encoding-> [B, W/4, 256]
-        Transformer        -> [B, W/4, 256]  (2 layers, 4 heads)
-        Linear head        -> [B, W/4, num_classes]
+        CNN backbone        -> [B, 64, H/4, W/4] feature sequence
+        Linear proj         -> [B, W/4, 256]
+        Positional encoding -> [B, W/4, 256]
+        Transformer         -> [B, W/4, 256]  (2 layers, 4 heads)
+        Linear head         -> [B, W/4, num_classes]
     """
 
     _PROJ_DIM = 256
@@ -145,20 +183,17 @@ class SimpleCRNN(nn.Module):
         cnn_feat_dim = 64 * (IMAGE_HEIGHT // 4)
         self.proj = nn.Linear(cnn_feat_dim, self._PROJ_DIM)
         self.pos_enc = _PositionalEncoding(self._PROJ_DIM)
-        encoder_layer = nn.TransformerEncoderLayer(
+        encoder_layer = ONNXTransformerEncoderLayer(
             d_model=self._PROJ_DIM,
             nhead=4,
             dim_feedforward=512,
             dropout=0.1,
-            batch_first=True,
         )
         self.transformer = nn.TransformerEncoder(encoder_layer, num_layers=2)
         self.fc = nn.Linear(self._PROJ_DIM, num_classes)
-
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         conv = self.cnn(x)                               # [B, 64, H/4, W/4]
-        b, c, h, w = conv.size()
-        feat = conv.view(b, c * h, w).permute(0, 2, 1)  # [B, W/4, C*H]
+        feat = conv.flatten(1, 2).permute(0, 2, 1)      # [B, W/4, C*H]
         feat = self.proj(feat)                           # [B, W/4, 256]
         feat = self.pos_enc(feat)                        # [B, W/4, 256]
         out  = self.transformer(feat)                    # [B, W/4, 256]
@@ -606,7 +641,7 @@ def export_to_onnx(
         opset_version=17,
         input_names=["image"],
         output_names=["logits"],
-        dynamic_axes={"image": {0: "batch"}, "logits": {0: "batch", 1: "time"}},
+        dynamic_axes={"image": {0: "batch", 3: "width"}, "logits": {0: "batch", 1: "time"}},
         verbose=False,
     )
 
@@ -1080,26 +1115,40 @@ def train_model(
     print(f"Total samples: {len(combined_samples):,}")
 
     class CombinedDataset(Dataset):
-        def __init__(self, samples: List[Tuple[Path, Path]]):
+        def __init__(self, samples: List[Tuple[Path, Path]], augment: bool = True):
             self.samples = samples
+            self.augment = augment
+            print("Preloading labels into RAM...")
+            self.labels = [
+                torch.tensor(
+                    text_to_indices(txt_path.read_text(encoding="utf-8")), dtype=torch.long
+                )
+                for _, txt_path in samples
+            ]
 
         def __len__(self) -> int:
             return len(self.samples)
 
         def __getitem__(self, idx: int):
-            img_path, txt_path = self.samples[idx]
+            img_path, _ = self.samples[idx]
             image = Image.open(img_path).convert("L")
-            labels = torch.tensor(
-                text_to_indices(txt_path.read_text(encoding="utf-8")), dtype=torch.long
-            )
-            return image, labels
+            if self.augment:
+                if random.random() < 0.5:
+                    image = ImageEnhance.Contrast(image).enhance(random.uniform(0.75, 1.3))
+                if random.random() < 0.5:
+                    image = ImageEnhance.Brightness(image).enhance(random.uniform(0.85, 1.15))
+                if random.random() < 0.3:
+                    angle = random.uniform(-2.5, 2.5)
+                    image = image.rotate(angle, resample=Image.BILINEAR, fillcolor=255)
+            return image, self.labels[idx]
 
     loader = DataLoader(
-        CombinedDataset(combined_samples), batch_size=32, shuffle=True, collate_fn=collate_fn
+        CombinedDataset(combined_samples, augment=True), batch_size=64, shuffle=True, collate_fn=collate_fn
     )
 
     model = SimpleCRNN(NUM_CLASSES).to(DEVICE)
-    optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+    optimizer = optim.AdamW(model.parameters(), lr=learning_rate, weight_decay=1e-4)
+    scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs, eta_min=learning_rate * 0.05)
     # CTC loss always runs on CPU (DirectML fallback has broken gradient flow).
     # We explicitly move log_probs to CPU; autograd routes gradients back to DEVICE.
     criterion = nn.CTCLoss(blank=0)
@@ -1118,8 +1167,9 @@ def train_model(
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
             optimizer.step()
             total_loss += loss.item()
-        print(f"Epoch {epoch}/{epochs} — avg loss: {total_loss / len(loader):.4f}")
-
+        current_lr = scheduler.get_last_lr()[0]
+        print(f"Epoch {epoch}/{epochs} — avg loss: {total_loss / len(loader):.4f} (lr: {current_lr:.6f})")
+        scheduler.step()
     save_path = Path(os.getcwd()) / output_path
     torch.save(model.state_dict(), str(save_path))
     print(f"Model saved to: {save_path}")
@@ -1321,4 +1371,11 @@ Recommended improvement workflow (no manual labelling):
             learning_rate=args.lr,
             epochs=args.epochs,
             output_path=args.output_path,
+        )
+
+    elif args.mode == "export_onnx":
+        out_path = args.output_path if args.output_path != "javanese_ocr.pth" else "model/javanese_ocr.onnx"
+        export_to_onnx(
+            model_path=args.model_path,
+            output_path=out_path,
         )
