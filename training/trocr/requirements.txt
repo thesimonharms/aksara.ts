@@ -18,7 +18,7 @@ jiwer>=3.0
 # Vision deps already used by the dataset generator
 pillow>=10.0
 PyMuPDF>=1.24
-
+gradio>=4.44
 # NOTE: PyTorch must be installed separately to match your backend:
 #   DirectML (AMD/Intel):  uv pip install torch torch-directml
 #   CUDA:                  pip install torch --index-url https://download.pytorch.org/whl/cu121

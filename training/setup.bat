@@ -2,6 +2,7 @@
 echo Setting up Python environment...
 python -m venv training\venv
 call training\venv\Scripts\activate
+python -m ensurepip --upgrade
 
 echo.
 echo Installing PyTorch and dependencies...
@@ -9,6 +10,9 @@ pip install torch --index-url https://download.pytorch.org/whl/cpu
 pip install onnx onnxruntime numpy pymupdf pillow torchvision
 if exist training\requirements.txt (
   pip install -r training\requirements.txt
+)
+if exist training\trocr\requirements.txt (
+  pip install -r training\trocr\requirements.txt
 )
 
 echo.
