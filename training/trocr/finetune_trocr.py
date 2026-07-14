@@ -97,21 +97,22 @@ class TrainConfig:
 def _load_pdf_labeled(pdf_dir: Path, upsample: float = 1.0):
     """Load real-handwriting (image, text) pairs produced by label_pdfs.py.
 
-    Expects label_XXXXXX.png + label_XXXXXX.txt pairs. Returns a datasets.Dataset
+    Expects label_XXXXXX.{png,jpg,jpeg} + label_XXXXXX.txt pairs. Returns a datasets.Dataset
     with `image` (PIL.Image) and `text` (str) columns, or None if the dir is
     empty / missing.
     """
     from datasets import Dataset, Image as HFImage
     if not pdf_dir or not pdf_dir.exists():
         return None
-    pngs = sorted(pdf_dir.glob("label_*.png"))
-    if not pngs:
-        print(f"[INFO] No label_*.png pairs found in {pdf_dir}")
+    exts = ("label_*.png", "label_*.PNG", "label_*.jpg", "label_*.JPG", "label_*.jpeg", "label_*.JPEG")
+    image_files = sorted({p.resolve() for ext in exts for p in pdf_dir.glob(ext)})
+    if not image_files:
+        print(f"[INFO] No label_*.png/jpg pairs found in {pdf_dir}")
         return None
     images, texts = [], []
     missing = 0
-    for png in pngs:
-        txt = png.with_suffix(".txt")
+    for img_path in image_files:
+        txt = img_path.with_suffix(".txt")
         if not txt.exists():
             missing += 1
             continue
@@ -119,13 +120,13 @@ def _load_pdf_labeled(pdf_dir: Path, upsample: float = 1.0):
             label = txt.read_text(encoding="utf-8").strip()
             if not label:
                 continue
-            img = Image.open(png)  # noqa: F821 — PIL imported at module top
+            img = Image.open(img_path).convert("RGB")  # noqa: F821 — PIL imported at module top
             images.append(img)
             texts.append(label)
         except Exception as exc:
-            print(f"[WARN] couldn't read {png}: {exc}")
+            print(f"[WARN] couldn't read {img_path}: {exc}")
     if missing:
-        print(f"[WARN] {missing} .png files had no matching .txt — skipped")
+        print(f"[WARN] {missing} image files had no matching .txt — skipped")
     if not texts:
         return None
     # Upsample so the ~hundreds of real-handwriting pairs aren't drowned out
@@ -136,6 +137,9 @@ def _load_pdf_labeled(pdf_dir: Path, upsample: float = 1.0):
     print(f"[INFO] Loaded {len(images)} labeled real-handwriting pairs from {pdf_dir}"
           f" (upsample ×{n})")
     return Dataset.from_dict({"image": images, "text": texts}).cast_column("image", HFImage())
+
+
+_load_labeled_pairs = _load_pdf_labeled
 
 def build_dataset(config: TrainConfig, processor: TrOCRProcessor, hf_token: Optional[str]) -> tuple:
     """Return (raw_loadable, model_ready) — raw is push-able, model_ready is processed."""
@@ -325,8 +329,9 @@ def parse_args() -> TrainConfig:
     p.add_argument("--hub_model_id", default=None)
     p.add_argument("--no_push", action="store_true", help="Don't push model to HF Hub.")
     p.add_argument("--push_dataset", action="store_true", help="Push dataset to HF Hub before training.")
-    p.add_argument("--pdf_labeled_dir", type=Path, default=Path("../pdf_labeled"),
-                   help="Dir of label_XXXX.png + label_XXXX.txt real-handwriting pairs "
+    p.add_argument("--pdf_labeled_dir", "--labeled_dir", dest="pdf_labeled_dir",
+                   type=Path, default=Path("../pdf_labeled"),
+                   help="Dir of label_XXXX.{png,jpg} + label_XXXX.txt real-handwriting pairs "
                         "from label_pdfs.py. Set to '' to skip.")
     p.add_argument("--upsample_labeled", type=int, default=1,
                    help="Duplicate labeled pairs by this factor (e.g. 5 so ~hundreds "

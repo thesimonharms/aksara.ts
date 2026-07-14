@@ -115,15 +115,16 @@ def collect_candidates(
     return list sorted by confidence ascending (hardest first).
     """
     print("Scoring strips to find the hardest examples…")
-    strips = sorted(unlabeled_dir.glob("*.png"))
+    image_exts = ("*.png", "*.PNG", "*.jpg", "*.JPG", "*.jpeg", "*.JPEG")
+    strips = sorted({p.resolve() for ext in image_exts for p in unlabeled_dir.glob(ext)})
     results = []
-    for i, png in enumerate(strips):
-        if png.stem in already_done:
+    for i, img_path in enumerate(strips):
+        if img_path.stem in already_done:
             continue
         try:
-            img = Image.open(png).convert("L")
+            img = Image.open(img_path).convert("L")
             text, conf = predict_strip(img, model, lm, beam_width, lm_weight)
-            results.append((conf, png, text))
+            results.append((conf, img_path, text))
         except Exception:
             continue
         if (i + 1) % 5000 == 0:
@@ -139,7 +140,7 @@ def main():
         description="Human-in-the-loop labeller for Javanese OCR strips."
     )
     parser.add_argument("--unlabeled_dir", required=True,
-                        help="Directory of PNG manuscript strips.")
+                        help="Directory of PNG/JPG manuscript strips.")
     parser.add_argument("--model_path", default=str(DEFAULT_MODEL_PATH),
                         help="Path to trained .pth checkpoint.")
     parser.add_argument("--output_dir", required=True,

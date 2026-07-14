@@ -185,9 +185,9 @@ with gr.Blocks(title="Javanese TrOCR Fine-tune") as demo:
             num_train = gr.Slider(500, 50000, value=5000, step=500, label="Train samples")
             num_val = gr.Slider(50, 5000, value=500, step=50, label="Val samples")
             fonts_dir = gr.Textbox("fonts", label="Fonts dir")
-            pdfs_dir = gr.Textbox("pdfs", label="PDFs dir")
+            pdfs_dir = gr.Textbox("pdfs", label="PDFs / images dir")
             gen_output_dir = gr.Textbox("trocr_dataset", label="Output dir")
-        gen_btn = gr.Button("1. Generate dataset from fonts + PDFs", variant="secondary")
+        gen_btn = gr.Button("1. Generate dataset from fonts + PDFs/images", variant="secondary")
         gen_out = gr.Markdown("")
         gen_btn.click(start_generate,
                       [num_train, num_val, fonts_dir, pdfs_dir, gen_output_dir],

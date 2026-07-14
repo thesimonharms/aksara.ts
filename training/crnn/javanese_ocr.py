@@ -963,10 +963,8 @@ def process_directory(input_dir: str, output_dir: str) -> None:
             print(f"    page {page_num}: {n} strip(s)")
             saved += n
 
-    image_files = sorted(
-        glob.glob(os.path.join(input_dir, "**/*.png"), recursive=True)
-        + glob.glob(os.path.join(input_dir, "**/*.jpg"), recursive=True)
-    )
+    exts = ("**/*.png", "**/*.PNG", "**/*.jpg", "**/*.JPG", "**/*.jpeg", "**/*.JPEG")
+    image_files = sorted({os.path.abspath(p) for ext in exts for p in glob.glob(os.path.join(input_dir, ext), recursive=True)})
     for img_path in image_files:
         print(f"  Image: {img_path}")
         n = _process_page(Image.open(img_path).convert("L"), Path(img_path).stem)
@@ -1022,11 +1020,12 @@ def pseudo_label(
     model = load_model(model_path)
     use_beam = lm is not None or beam_width > 1
 
-    png_files = sorted(Path(unlabeled_dir).glob("*.png"))
-    unlabeled = [p for p in png_files if not p.with_suffix(".txt").exists()]
+    exts = ("*.png", "*.PNG", "*.jpg", "*.JPG", "*.jpeg", "*.JPEG")
+    img_files = sorted({p.resolve() for ext in exts for p in Path(unlabeled_dir).glob(ext)})
+    unlabeled = [p for p in img_files if not p.with_suffix(".txt").exists()]
 
     if not unlabeled:
-        print("No unlabeled PNGs found (all strips already have .txt files).")
+        print("No unlabeled PNG/JPG images found (all strips already have .txt files).")
         return
 
     os.makedirs(output_dir, exist_ok=True)

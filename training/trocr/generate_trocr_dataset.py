@@ -84,24 +84,39 @@ class TrOCRDatasetGenerator:
 
     def _load_pdf_backgrounds(self, pdfs_dir: Path) -> List[Image.Image]:
         bg_images = []
-        if not HAS_PYMUPDF or not pdfs_dir.exists():
+        if not pdfs_dir.exists():
             return bg_images
 
-        for pdf_path in pdfs_dir.glob("*.pdf"):
-            try:
-                doc = fitz.open(pdf_path)
-                for page_idx in range(min(5, len(doc))):
-                    page = doc[page_idx]
-                    pix = page.get_pixmap(dpi=150)
-                    img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+        exts = ("*.pdf", "*.PDF", "*.png", "*.PNG", "*.jpg", "*.JPG", "*.jpeg", "*.JPEG")
+        files = sorted({p.resolve() for ext in exts for p in pdfs_dir.glob(ext)})
+
+        for file_path in files:
+            ext = file_path.suffix.lower()
+            if ext == ".pdf":
+                if not HAS_PYMUPDF:
+                    continue
+                try:
+                    doc = fitz.open(file_path)
+                    for page_idx in range(min(5, len(doc))):
+                        page = doc[page_idx]
+                        pix = page.get_pixmap(dpi=150)
+                        img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+                        bg_images.append(img)
+                    doc.close()
+                except Exception as exc:
+                    print(f"Could not load background PDF {file_path}: {exc}")
+            elif ext in (".png", ".jpg", ".jpeg"):
+                try:
+                    img = Image.open(file_path).convert("RGB")
                     bg_images.append(img)
-                doc.close()
-            except Exception as exc:
-                print(f"Could not load background PDF {pdf_path}: {exc}")
+                except Exception as exc:
+                    print(f"Could not load background image {file_path}: {exc}")
 
         if bg_images:
-            print(f"Loaded {len(bg_images)} background page(s) from {pdfs_dir}")
+            print(f"Loaded {len(bg_images)} background page(s)/image(s) from {pdfs_dir}")
         return bg_images
+
+    _load_backgrounds = _load_pdf_backgrounds
 
     def _get_font(self, size: int):
         if not self.fonts:
@@ -210,7 +225,9 @@ def main():
     parser = argparse.ArgumentParser(description="Generate Javanese TrOCR dataset formatted for AutoTrain Advanced.")
     parser.add_argument("--corpus", type=Path, default=Path("../javanese_corpus_clean.txt"), help="Text corpus path.")
     parser.add_argument("--fonts_dir", type=Path, default=Path("../fonts"), help="Directory containing TTF/OTF fonts.")
-    parser.add_argument("--pdfs_dir", type=Path, default=Path("../pdfs"), help="Directory containing background PDFs.")
+    parser.add_argument("--pdfs_dir", "--backgrounds_dir", "--images_dir",
+                        dest="pdfs_dir", type=Path, default=Path("../pdfs"),
+                        help="Directory containing background PDFs or manuscript images (PNG/JPG).")
     parser.add_argument("--output_dir", type=Path, default=Path("../trocr_dataset"), help="Output directory for dataset.")
     parser.add_argument("--num_train", type=int, default=5000, help="Number of training samples.")
     parser.add_argument("--num_val", type=int, default=500, help="Number of validation samples.")

@@ -77,11 +77,11 @@ bash training.sh --model segmenter   # bootstraps venv
 ./training/venv/bin/python -m pip install -r training/trocr/requirements.txt
 ```
 
-### 2. Drop fonts and PDFs
+### 2. Drop fonts and manuscript scans (PDF / PNG / JPG)
 
 ```
-training/fonts/*.ttf        ← fonts render the Aksara text into line images
-training/pdfs/*.{pdf,PDF}   ← manuscript scans used as background textures
+training/fonts/*.{ttf,otf}             ← fonts render the Aksara text into line images
+training/pdfs/*.{pdf,png,jpg,jpeg}     ← manuscript scans used as background textures & HITL labeling sources
 ```
 
 ### 3. Generate the dataset

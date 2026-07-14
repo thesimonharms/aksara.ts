@@ -29,10 +29,11 @@ data/jv.txt
 # Root-level LM if generated outside training/
 javanese_lm.pkl
 
-# Manuscript scans
+# Manuscript scans & background images
+training/pdfs/*
+!training/pdfs/README.md
 training/**/*.pdf
 training/**/*.PDF
-
 # ── Training — generated datasets (PNG strips + labels) ───────────────────────
 training/ocr_data/
 training/ocr_data_noisy/
@@ -76,5 +77,9 @@ training/venv/
 *.pyo
 
 # ── Fonts (binary, obtain from Google Fonts / Tuladha Jejeg project) ──────────
+training/fonts/*
+!training/fonts/README.md
 *.ttf
 *.otf
+*.woff
+*.woff2
