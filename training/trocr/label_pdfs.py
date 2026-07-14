@@ -33,12 +33,13 @@ from PIL import Image
 
 try:
     import fitz  # PyMuPDF
+    HAS_PYMUPDF = True
 except ImportError:
-    print("[ERROR] PyMuPDF (fitz) is required:  uv pip install pymupdf", file=sys.stderr)
-    sys.exit(1)
-
-import gradio as gr
-
+    HAS_PYMUPDF = False
+try:
+    import gradio as gr
+except ImportError:
+    gr = None
 
 # ---------------------------------------------------------------------------
 # Strip detection — horizontal projection profile
@@ -104,6 +105,9 @@ class Candidate:
     img: Image.Image                     # cropped strip (RGB)
     page_img: Image.Image                # full page (for manual box fallback)
 
+    @property
+    def source_path(self) -> Path:
+        return self.pdf_path
 
 @dataclass
 class Labeler:
@@ -121,41 +125,69 @@ class Labeler:
     active_bounds: Optional[Tuple[int, int]] = None  # (y0, y1) in page coords
 
     def load_candidates(self) -> int:
-        """Walk pdfs_dir in sorted order, rasterize pages, detect strips."""
-        pdfs = sorted(
-            list(self.pdfs_dir.glob("*.pdf")) + list(self.pdfs_dir.glob("*.PDF"))
-        ) if self.pdfs_dir.exists() else []
-        if not pdfs:
-            print(f"[WARN] No PDFs found in {self.pdfs_dir}")
+        """Walk pdfs_dir in sorted order, load PDFs and manuscript images (PNG/JPG), detect strips."""
+        if not self.pdfs_dir.exists():
+            print(f"[WARN] Directory not found: {self.pdfs_dir}")
             return 0
 
-        # Deterministic ordering across runs: (pdf_idx, page_idx, strip_idx).
-        for pidx, pdf_path in enumerate(pdfs):
-            try:
-                doc = fitz.open(pdf_path)
-            except Exception as exc:
-                print(f"[WARN] could not open {pdf_path}: {exc}")
-                continue
-            for page_idx in range(len(doc)):
-                page = doc[page_idx]
-                pix = page.get_pixmap(dpi=self.dpi)
-                page_img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+        exts = ("*.pdf", "*.PDF", "*.png", "*.PNG", "*.jpg", "*.JPG", "*.jpeg", "*.JPEG")
+        files = sorted({p.resolve() for ext in exts for p in self.pdfs_dir.glob(ext)})
+        if not files:
+            print(f"[WARN] No PDFs or manuscript images found in {self.pdfs_dir}")
+            return 0
+
+        for file_path in files:
+            ext = file_path.suffix.lower()
+            if ext == ".pdf":
+                if not HAS_PYMUPDF:
+                    print(f"[WARN] PyMuPDF not installed, skipping PDF {file_path} (install with: uv pip install pymupdf)")
+                    continue
+                try:
+                    doc = fitz.open(file_path)
+                except Exception as exc:
+                    print(f"[WARN] could not open {file_path}: {exc}")
+                    continue
+                for page_idx in range(len(doc)):
+                    page = doc[page_idx]
+                    pix = page.get_pixmap(dpi=self.dpi)
+                    page_img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+                    arr_img = page_img.copy()
+                    strips = detect_strips(page_img)
+                    for sidx, (y0, y1) in enumerate(strips):
+                        y0p = max(0, y0 - self.pad_y)
+                        y1p = min(page_img.height, y1 + self.pad_y)
+                        crop = arr_img.crop((0, y0p, page_img.width, y1p))
+                        self.candidates.append(Candidate(
+                            pdf_path=file_path, page_idx=page_idx, strip_idx=sidx,
+                            bbox=(0, y0p, page_img.width, y1p),
+                            img=crop, page_img=arr_img,
+                        ))
+                doc.close()
+            elif ext in (".png", ".jpg", ".jpeg"):
+                try:
+                    page_img = Image.open(file_path).convert("RGB")
+                except Exception as exc:
+                    print(f"[WARN] could not open image {file_path}: {exc}")
+                    continue
                 arr_img = page_img.copy()
-                for sidx, (y0, y1) in enumerate(detect_strips(page_img)):
+                strips = detect_strips(page_img)
+                if not strips:
+                    # Fallback if image is already a single cropped strip or low contrast
+                    strips = [(0, page_img.height)]
+                for sidx, (y0, y1) in enumerate(strips):
                     y0p = max(0, y0 - self.pad_y)
                     y1p = min(page_img.height, y1 + self.pad_y)
                     crop = arr_img.crop((0, y0p, page_img.width, y1p))
                     self.candidates.append(Candidate(
-                        pdf_path=pdf_path, page_idx=page_idx, strip_idx=sidx,
+                        pdf_path=file_path, page_idx=0, strip_idx=sidx,
                         bbox=(0, y0p, page_img.width, y1p),
                         img=crop, page_img=arr_img,
                     ))
-            doc.close()
+
         self._load_saved_labels()
         self._skip_already_labeled()
         print(f"[INFO] {len(self.candidates)} candidate strips after resume filter")
         return len(self.candidates)
-
     def _label_path(self, idx: int) -> Path:
         return self.output_dir / f"label_{idx:06d}.txt"
 
@@ -266,10 +298,7 @@ class Labeler:
             self.idx += 1
         if self.idx >= len(self.candidates):
             blank = Image.new("RGB", (320, 80), "white")
-            return (blank, blank,
-                    f"**Done!** {len(self.saved_labels)} labeled. "
-                    f"Restart with more PDFs to continue.",
-                    "", 0, 1, "")
+            return (blank, blank, "", 0, 1, "")
         return self.current_view()
 
 
@@ -277,8 +306,10 @@ class Labeler:
 # CLI + Gradio UI
 # ---------------------------------------------------------------------------
 def parse_args():
-    p = argparse.ArgumentParser(description="Javanese Aksara manuscript HITL labeler.")
-    p.add_argument("--pdfs_dir",   type=Path, default=Path("../pdfs"))
+    p = argparse.ArgumentParser(description="Javanese Aksara manuscript HITL labeler (PDFs, PNG, JPG).")
+    p.add_argument("--pdfs_dir", "--manuscripts_dir", "--images_dir",
+                   dest="pdfs_dir", type=Path, default=Path("../pdfs"),
+                   help="Directory containing scanned manuscript PDFs or images (PNG/JPG).")
     p.add_argument("--output_dir", type=Path, default=Path("../pdf_labeled"))
     p.add_argument("--dpi", type=int, default=200)
     p.add_argument("--port", type=int, default=7861)
@@ -292,11 +323,14 @@ def main():
                       dpi=args.dpi)
     count = labeler.load_candidates()
     if count == 0:
-        print("\nNothing to label. Drop scanned PDFs into "
+        print("\nNothing to label. Drop scanned PDFs or images (PNG/JPG) into "
               f"{args.pdfs_dir.resolve()} and re-run.", file=sys.stderr)
         sys.exit(1)
 
     page_max_h = max((c.page_img.height for c in labeler.candidates), default=1)
+    if gr is None:
+        print("[ERROR] gradio is required to run the UI:  pip install gradio", file=sys.stderr)
+        sys.exit(1)
 
     with gr.Blocks(title="Javanese Aksara — HITL labeler") as demo:
         gr.Markdown(
