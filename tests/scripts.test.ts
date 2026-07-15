@@ -56,7 +56,7 @@ describe("additional Indonesian scripts", () => {
 
     test("supports all three Unicode medial consonant signs", () => {
       expect(new Sundanese("kriya").getAksara()).toBe("ᮊᮢᮤᮚ");
-      expect(new Sundanese("klya").getAksara()).toBe("ᮊᮣᮚ");
+      expect(new Sundanese("kla").getAksara()).toBe("ᮊᮣ");
       expect(new Sundanese("kya").getAksara()).toBe("ᮊᮡ");
     });
 

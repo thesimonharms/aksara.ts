@@ -344,7 +344,10 @@ export function fromScript(text: string, script: SupportedScript): string {
       if (vowel) {
         output += vowel[1];
         i += Array.from(vowel[0]).length;
-      } else if (chars[i] === profile.killer || chars[i] === profile.conjoiner) {
+      } else if (
+        (profile.killer !== undefined && chars[i] === profile.killer) ||
+        (profile.conjoiner !== undefined && chars[i] === profile.conjoiner)
+      ) {
         i++;
       } else {
         output += "a";
