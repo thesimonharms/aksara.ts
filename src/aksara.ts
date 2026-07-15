@@ -517,3 +517,14 @@ class Aksara {
 }
 
 export { Aksara };
+export {
+  Balinese,
+  Buginese,
+  Kawi,
+  Sasak,
+  ScriptTransliterator,
+  Sundanese,
+  fromScript,
+  toScript,
+} from "./scripts";
+export type { SupportedScript } from "./scripts";

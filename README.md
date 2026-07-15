@@ -98,6 +98,50 @@ Aksara.fromAksara('ꦧꦸꦟ꧀ꦝꦼꦭ꧀');   // → 'bunḍel'   (murda Na +
 
 **Known limitation:** ꦲ is ambiguous — it is both the consonant `h` and the carrier for standalone vowels under the *h*+vowel convention. `fromAksara('ꦲꦗꦶ')` returns `'haji'`, not `'aji'`. This is irreducible without explicit vowel letters.
 
+### Other Indonesian scripts
+
+Kawi, Balinese, Sundanese, Sasak (Jejawan), and Buginese (Lontara) are
+available as named classes without changing the existing Javanese API:
+
+```typescript
+import {
+  Aksara, Balinese, Buginese, Kawi, Sasak, Sundanese,
+  fromScript, toScript,
+} from 'aksara-ts';
+
+new Kawi('kawi').getAksara();                    // → '𑼒𑼮𑼶'
+new Balinese('basa bali', true).getAksara();     // → 'ᬩᬲ ᬩᬮᬶ'
+new Sundanese('sunda').getAksara();              // → 'ᮞᮥᮔ᮪ᮓ'
+new Sasak('sasak').getAksara();                  // → 'ᬲᬲᬓ᭄'
+new Buginese('lontara').getAksara();             // → 'ᨒᨚᨈᨑ'
+
+Balinese.fromAksara('ᬩᬮᬶ');                     // → 'bali'
+toScript('sunda', 'sundanese');                 // → 'ᮞᮥᮔ᮪ᮓ'
+fromScript('𑼒𑼮𑼶', 'kawi');                       // → 'kawi'
+```
+
+The second class constructor argument preserves spaces, as it does for
+`Aksara`. Latin `e` means schwa/pepet and `é` means /e/; Sundanese also
+recognizes `eu`. Kawi and Balinese accept the long vowels `ā`, `ī`, and `ū`.
+
+Buginese is intentionally lossy: traditional Lontara does not encode
+syllable-final consonants or form conjuncts. For example, `sara`, `sara'`, and
+`sarang` are all written `ᨔᨑ`. The converter omits codas rather than emitting
+a non-standard virama. Sasak uses the Balinese Unicode block; `q` maps to
+U+1B45 KAF SASAK for the documented glottal-stop spelling. The other six
+late-20th-century “Sasak” additions are not guessed because Unicode notes that
+they have seen little actual use.
+
+Implementation details and character choices are based on these references:
+
+- [Unicode 17, Kawi](https://www.unicode.org/versions/Unicode17.0.0/core-spec/chapter-17/#G41642)
+  and [Implementing Kawi (UTN #48)](https://www.unicode.org/notes/tn48/UTN48-Implementing-Kawi-1.pdf)
+- [Unicode 17, Balinese](https://www.unicode.org/versions/Unicode17.0.0/core-spec/chapter-17/#G26723)
+- [Unicode 17, Sundanese](https://www.unicode.org/versions/Unicode17.0.0/core-spec/chapter-17/#G27247)
+- [Unicode Technical Note #51, Sasak characters](https://www.unicode.org/notes/tn51/UTN51-Balinese-Characters-1.pdf)
+- [Unicode 17, Buginese](https://www.unicode.org/versions/Unicode17.0.0/core-spec/chapter-17/#G26977)
+  and [Buginese orthography notes](https://r12a.github.io/scripts/bugi/bug.html)
+
 ### Word segmentation
 
 Aksara Jawa uses no spaces between words. After decoding a manuscript with `fromAksara`, the output is a continuous character stream. The `Segmenter` class restores word boundaries using a BiLSTM model trained on Javanese Wikipedia.
@@ -142,6 +186,16 @@ Returns the original input text.
 
 ### `Aksara.fromAksara(text: string): string`
 Decodes an Aksara Jawa string to Latin-script Javanese. Handles the full consonant set including murda, retroflex, and vocalic syllables. Unknown codepoints pass through unchanged.
+
+### Additional script API
+
+- `new Kawi|Balinese|Sundanese|Sasak|Buginese(text, spaces?).getAksara()`
+- `Kawi|Balinese|Sundanese|Sasak|Buginese.fromAksara(text)`
+- `toScript(text, script, spaces?)`
+- `fromScript(text, script)`
+
+`script` is one of `kawi`, `balinese`, `sundanese`, `sasak`, or `buginese`.
+Unknown characters pass through unchanged.
 
 ### `Segmenter.load(modelPath, vocabPath): Promise<Segmenter>`
 Loads a trained ONNX segmentation model.
