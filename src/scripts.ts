@@ -216,6 +216,10 @@ export function toScript(
 
     if (token.kind === "other") {
       if (token.value === "_") continue;
+      if (
+        profile.omitCodas &&
+        (token.value === "'" || token.value === "’")
+      ) continue;
       if (token.value === " " && !spaces) continue;
       output +=
         (profile.punctuation && profile.punctuation[token.value]) ||

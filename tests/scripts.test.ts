@@ -93,6 +93,7 @@ describe("additional Indonesian scripts", () => {
     test("omits codas instead of inventing a non-Unicode virama", () => {
       // Unicode documents that sara, sara', and sarang are all ᨔᨑ.
       expect(new Buginese("sara").getAksara()).toBe("ᨔᨑ");
+      expect(new Buginese("sara'").getAksara()).toBe("ᨔᨑ");
       expect(new Buginese("sarang").getAksara()).toBe("ᨔᨑ");
       expect(Buginese.fromAksara("ᨔᨑ")).toBe("sara");
     });
