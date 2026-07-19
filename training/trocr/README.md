@@ -16,12 +16,15 @@ training/trocr/
   generate_trocr_dataset.py   Synthetic dataset generator (fonts + PDFs → imagefolder)
   label_pdfs.py               HITL labeler — auto-detects manuscript line strips and
                               lets you type Latin transliterations via a Gradio UI
-  finetune_trocr.py           Seq2SeqTrainer fine-tuning script
+  finetune_trocr.py           Seq2SeqTrainer fine-tuning script (Jobs + local)
+  push_dataset.py             Push local imagefolder to a **private** Hub dataset
+  jobs.md                     HF Jobs smoke + full-train recipes (production path)
+  nas/                        Linux NAS Docker hands-off v2 retrain (Intel XPU)
   requirements.txt            Pinned deps for the importable pipeline (torch-wheel comment inside)
   README.md                   This document
   trocr_dataset/              (generated, gitignored) — output of generate_trocr_dataset.py
   trocr_ckpt/                 (generated, gitignored) — Trainer checkpoints + final model
-  space/                      HF Space SDK=docker config — see "HF Space path" below
+  space/                      HF Space SDK=docker — optional UI only; do not train here
 ```
 
 ```
@@ -29,14 +32,23 @@ training/fonts/               Drop your .ttf / .otf Javanese Aksara fonts here (
 training/pdfs/                Drop scanned manuscript .pdf files here (gitignored)
 ```
 
-## Two paths
+## Three paths
 
 | Path | Compute | Use when |
 |------|---------|----------|
-| **Local** | your CPU / DirectML (no CUDA needed) | Quick 1-epoch smoke runs, debugging the dataset, iterating on augmentation |
-| **HF Space** | rented T4 GPU in a HF Space | Real fine-tune runs that actually beat the CRNN baseline |
+| **Local Intel Arc (XPU)** | Arc Pro B60 eGPU via `torch.xpu` | **Inference** + local fine-tunes (`.venv-xpu`) |
+| **HF Jobs** | rented L4 / A10G via `hf jobs` | Cloud fine-tunes when local GPU is busy |
+| **HF Space** | Gradio docker Space | Optional demo / labeling UI — **not for training** |
 
-Both paths share the same `finetune_trocr.py`; only the entry-point differs.
+Setup + run commands: **[`jobs.md`](jobs.md)** (Local Intel Arc section first).
+
+Both Jobs and local share `finetune_trocr.py`. Verify scripts (`verify_trocr.py`,
+`local_verify_large.py`) auto-pick `xpu` when the Arc stack is installed.
+
+**Licensing:** the Hub dataset (`javanese-dataset`) is pushed **private** by
+default — you can train on it, but it is not redistributed publicly. The
+fine-tuned **model** weights may still be published openly if that matches your
+goals.
 
 ## Secrets / .env
 
@@ -158,31 +170,28 @@ The `--upsample_labeled 5` flag duplicates your ~hundreds of real-handwriting
 pairs 5× so they aren't drowned out by the thousands of synthetic samples;
 tune to taste once you see val-CER.
 
-## HF Space path (T4 GPU — recommended for the "real" run)
+## HF Jobs path (recommended for real training)
 
-The `space/` subdirectory has a complete HF Space SDK=docker config: a
-Dockerfile, a Gradio app front-end, pinned CUDA requirements, and a README with
-HF frontmatter. See [`space/README.md`](space/README.md) for the step-by-step.
+See **[`jobs.md`](jobs.md)**. Short version:
 
-Short version:
+1. Push a **private** dataset: `python push_dataset.py --repo_id <you>/javanese-dataset`
+2. Run a smoke Job (200 samples, 15m timeout on `l4x1`), then the full 5-epoch
+   Job on **`a10g-large`** with batch 24 (L4 OOMs at that batch).
+3. Confirm the Hub model repo is non-empty; pause any leftover GPU Space.
 
-1. Create a HF Space (SDK **docker**, hardware **T4 small**) — copy the four
-   scripts in `space/` plus `generate_trocr_dataset.py` and `finetune_trocr.py`
-   from this folder into the Space repo root.
-2. Set `HF_TOKEN` and `HF_USERNAME` as Space Secrets.
-3. Upload your `.ttf` / `.otf` to `fonts/` and your `.pdf`s to `pdfs/` *in the
-   Space repo* (your gitignored local copies never need to leave your machine).
-4. Click **1. Generate dataset** → **2. Push dataset** → **3. Run fine-tuning**.
+## HF Space path (optional UI only — do not train here)
 
-Net cost on a $10 budget at T4 small (~$0.40/h):
-**~25 hours of training**, e.g. 5 epochs on 5k samples ≈ $0.40 / run.
+The `space/` subdirectory has a Gradio docker Space for demos / labeling.
+Training on Spaces previously hung for hours without reliable Hub push — prefer
+Jobs. If you still use the Space UI, see [`space/README.md`](space/README.md)
+and pause the Space when idle.
 
 ## Publishing targets
 
-| Artifact | Default HF Hub id |
-|----------|------|
-| Dataset  | `{HF_USERNAME}/javanese-dataset` (toggle with `--push_dataset`) |
-| Model    | `{HF_USERNAME}/javanese-trocr-handwritten` (override with `--hub_model_id`) |
+| Artifact | Default HF Hub id | Visibility |
+|----------|------|---|
+| Dataset  | `{HF_USERNAME}/javanese-dataset` (`push_dataset.py` / `--push_dataset`) | **Private** by default |
+| Model    | `{HF_USERNAME}/javanese-trocr-handwritten` (override with `--hub_model_id`) | Whatever you set on the model repo |
 
 ## Tips for improving the dataset
 

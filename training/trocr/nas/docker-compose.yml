@@ -1,0 +1,46 @@
+# Hands-off TrOCR v2 train on NAS (Intel Arc XPU via Docker).
+# Usage (on the NAS, after SSH):
+#   cd /path/to/aksara.ts/training/trocr/nas
+#   export HF_TOKEN=hf_xxx
+#   docker compose build
+#   docker compose run --rm trocr-train detect   # verify GPU
+#   docker compose up -d trocr-train             # fire-and-forget
+
+services:
+  trocr-train:
+    build: .
+    image: aksara-trocr-xpu:latest
+    container_name: aksara-trocr-v2
+    # Pass whole DRI tree (iGPU + OcuLink Arc). entrypoint picks discrete card.
+    devices:
+      - /dev/dri:/dev/dri
+    group_add:
+      # Host render GID — override in .env as RENDER_GID=$(stat -c %g /dev/dri/renderD128)
+      - "${RENDER_GID:-109}"
+    ipc: host
+    shm_size: "16gb"
+    environment:
+      HF_TOKEN: "${HF_TOKEN}"
+      HF_USERNAME: "${HF_USERNAME:-thesimonharms}"
+      BASE_MODEL: "${BASE_MODEL:-thesimonharms/trocr-javanese-synthetic}"
+      HUB_MODEL_ID: "${HUB_MODEL_ID:-thesimonharms/trocr-javanese-synthetic-v2}"
+      EPOCHS: "${EPOCHS:-15}"
+      LR: "${LR:-1e-5}"
+      EARLY_STOP: "${EARLY_STOP:-3}"
+      TROCR_BATCH_SIZE: "${TROCR_BATCH_SIZE:-}"
+      # Uncomment if Linux SDPA/bf16 misbehaves on first bring-up:
+      # TROCR_ATTN: eager
+      # TROCR_FORCE_FP32: "1"
+    volumes:
+      # Live training code from the repo checkout on the NAS
+      - ../:/workspace/trocr:ro
+      - trocr_output:/workspace/output
+      - trocr_hf_cache:/workspace/hf-cache
+      - trocr_logs:/workspace/logs
+    restart: "no"
+    command: ["train"]
+
+volumes:
+  trocr_output:
+  trocr_hf_cache:
+  trocr_logs:

@@ -1,0 +1,2 @@
+training/trocr/nas/*.sh text eol=lf
+training/trocr/nas/entrypoint.sh text eol=lf

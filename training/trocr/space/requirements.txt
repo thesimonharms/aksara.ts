@@ -11,5 +11,7 @@ sentencepiece>=0.2.0
 python-dotenv>=1.0
 pillow>=10.0
 PyMuPDF>=1.24
-gradio>=4.44
+# >=6.20 replaces deprecated Starlette HTTP_422_UNPROCESSABLE_ENTITY usage that
+# otherwise floods Space logs (short retention) via StarletteDeprecationWarning.
+gradio>=6.20,<7
 torch==2.5.1

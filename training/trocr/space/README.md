@@ -45,6 +45,10 @@ Optional secrets:
 - `EPOCHS` (default `5`)
 - `PER_DEVICE_TRAIN_BATCH_SIZE` (default `8`)
 - `DATASET_NAME` (HF Hub dataset id — skips local generation, loads from Hub)
+- `HUB_MODEL_ID` (HF Hub model id — overrides the default `{HF_USERNAME}/javanese-trocr-handwritten`.
+  Use this for experiment variants, e.g. `{HF_USERNAME}/trocr-javanese-synthetic` for a
+  synthetic-only preliminary run. You can also override it per-run via the UI text box;
+  the literal string `{HF_USERNAME}/...` is resolved against the `HF_USERNAME` secret.)
 
 ## What to upload to the Space repo
 

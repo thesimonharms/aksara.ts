@@ -34,13 +34,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import gradio as gr  # noqa: E402
 
-from finetune_trocr import run_pipeline  # noqa: E402
+from finetune_trocr import run_pipeline, _hf_token, _hf_username  # noqa: E402
 
 
 BASE_MODEL_DEFAULT = os.environ.get("BASE_MODEL", "microsoft/trocr-base-handwritten")
 EPOCHS_DEFAULT = int(os.environ.get("EPOCHS", "5"))
 BATCH_DEFAULT = int(os.environ.get("PER_DEVICE_TRAIN_BATCH_SIZE", "8"))
 DATASET_NAME_DEFAULT = os.environ.get("DATASET_NAME", "")
+HUB_MODEL_ID_DEFAULT = os.environ.get("HUB_MODEL_ID", "")
 
 
 # ---------------------------------------------------------------------------
@@ -103,10 +104,18 @@ def task_generate(num_train: int, num_val: int, fonts_dir: str, pdfs_dir: str, o
 def task_push_dataset(dataset_dir: str) -> str:
     """Load the local imagefolder dataset, then push it to HF Hub."""
     from datasets import DatasetDict, load_dataset
-    hf_token = os.environ.get("HF_TOKEN")
-    hf_user = os.environ.get("HF_USERNAME")
-    if not (hf_token and hf_user):
-        raise RuntimeError("HF_TOKEN / HF_USERNAME must be set as Space Secrets to push the dataset.")
+    hf_token = _hf_token()
+    hf_user = _hf_username()
+    if not hf_token:
+        raise RuntimeError(
+            "HF_TOKEN is unset. Add it under Space → Settings → Variables and secrets → Secrets, "
+            "then Factory reboot."
+        )
+    if not hf_user:
+        raise RuntimeError(
+            "HF_USERNAME / SPACE_AUTHOR_NAME unset — cannot resolve Hub dataset id. "
+            "Set HF_USERNAME as a Space Secret or Variable, then Factory reboot."
+        )
     dd = Path(dataset_dir)
     if not dd.exists():
         raise RuntimeError(f"Dataset dir not found: {dd}. Run 'Generate' first.")
@@ -114,16 +123,27 @@ def task_push_dataset(dataset_dir: str) -> str:
     val = load_dataset("imagefolder", data_dir=str(dd / "validation"), split="train")
     raw = DatasetDict({"train": train, "validation": val})
     target = f"{hf_user}/javanese-dataset"
-    raw.push_to_hub(target, token=hf_token, private=False)
-    return f"Dataset pushed to {target}"
+    raw.push_to_hub(target, token=hf_token, private=True)
+    return f"Private dataset pushed to {target}"
 
 
-def task_train(dataset_name: str, epochs: int, batch_size: int, base_model: str) -> str:
+def task_train(dataset_name: str, epochs: int, batch_size: int, base_model: str, hub_model_id: str) -> str:
+    # Resolve {HF_USERNAME}/... shorthand against the Space secret / author name
+    # so the user can type `{HF_USERNAME}/trocr-javanese-synthetic` in the UI.
+    if hub_model_id and "{HF_USERNAME}" in hub_model_id:
+        hf_user = _hf_username() or ""
+        if not hf_user:
+            raise RuntimeError(
+                "Hub model id uses {HF_USERNAME} but no username is available. "
+                "Set HF_USERNAME or rely on SPACE_AUTHOR_NAME after a Factory reboot."
+            )
+        hub_model_id = hub_model_id.replace("{HF_USERNAME}", hf_user)
     overrides = {
         "dataset_name": dataset_name or None,
         "epochs": int(epochs) if epochs else 5,
         "batch_size": int(batch_size) if batch_size else 8,
         "base_model": base_model or BASE_MODEL_DEFAULT,
+        "hub_model_id": hub_model_id or None,
     }
     return run_pipeline(overrides)
 
@@ -142,21 +162,32 @@ def start_push_dataset(dataset_dir):
     return _guarded_start("push dataset", task_push_dataset, dataset_dir)
 
 
-def start_train(dataset_name, epochs, batch_size, base_model):
+def start_train(dataset_name, epochs, batch_size, base_model, hub_model_id):
     return _guarded_start(
         "fine-tune model", task_train,
-        dataset_name, epochs, batch_size, base_model,
+        dataset_name, epochs, batch_size, base_model, hub_model_id,
     )
 
 
 def env_status_md() -> str:
-    tok = "SET" if os.environ.get("HF_TOKEN") else "<b>MISSING</b>"
-    user = os.environ.get("HF_USERNAME", "<b>MISSING</b>")
+    tok = "SET" if _hf_token() else "**MISSING**"
+    user = _hf_username() or "**MISSING**"
+    source = []
+    if os.environ.get("HF_USERNAME"):
+        source.append("HF_USERNAME")
+    elif os.environ.get("SPACE_AUTHOR_NAME"):
+        source.append("SPACE_AUTHOR_NAME")
+    src = f" (from {', '.join(source)})" if source else ""
     return (
         "| Secret | Status |\n|---|---|\n"
         f"| `HF_TOKEN` | {tok} |\n"
-        f"| `HF_USERNAME` | {user} |\n"
-        "\nOptional: `BASE_MODEL`, `EPOCHS`, `PER_DEVICE_TRAIN_BATCH_SIZE`, `DATASET_NAME`."
+        f"| username | `{user}`{src} |\n"
+        "\nIf token shows MISSING: **Settings → Variables and secrets → New secret** "
+        "`HF_TOKEN` = a write-scoped token from "
+        "[huggingface.co/settings/tokens](https://huggingface.co/settings/tokens), "
+        "then **Factory reboot**. Username falls back to the Space author when "
+        "`HF_USERNAME` is unset.\n\n"
+        "Optional: `BASE_MODEL`, `EPOCHS`, `PER_DEVICE_TRAIN_BATCH_SIZE`, `DATASET_NAME`."
     )
 
 
@@ -178,7 +209,7 @@ with gr.Blocks(title="Javanese TrOCR Fine-tune") as demo:
         "then fine-tune `microsoft/trocr-base-handwritten` on it. The fine-tuned model is pushed to "
         "your HF Hub automatically."
     )
-    gr.Markdown(f"### Space secrets\n{env_status_md()}")
+    secrets_md = gr.Markdown(f"### Space secrets\n{env_status_md()}")
 
     with gr.Accordion("1. Generate dataset", open=True):
         with gr.Row():
@@ -206,16 +237,21 @@ with gr.Blocks(title="Javanese TrOCR Fine-tune") as demo:
             epochs_ui = gr.Slider(1, 20, value=EPOCHS_DEFAULT, step=1, label="Epochs")
             batch_ui = gr.Slider(1, 32, value=BATCH_DEFAULT, step=1, label="Per-device batch size")
             base_model_ui = gr.Textbox(BASE_MODEL_DEFAULT, label="Base model")
+            hub_model_id_ui = gr.Textbox(
+                HUB_MODEL_ID_DEFAULT or "{HF_USERNAME}/trocr-javanese-synthetic",
+                label="Hub model id (blank → javanese-trocr-handwritten)",
+            )
         train_btn = gr.Button("3. Run fine-tuning", variant="primary")
         train_out = gr.Markdown("")
         train_btn.click(start_train,
-                       [ds_name, epochs_ui, batch_ui, base_model_ui],
+                       [ds_name, epochs_ui, batch_ui, base_model_ui, hub_model_id_ui],
                        train_out)
 
     gr.Markdown("### Live status")
     status_box = gr.Markdown(poll_status())
     timer = gr.Timer(5)
     timer.tick(poll_status, outputs=status_box)
+    timer.tick(lambda: f"### Space secrets\n{env_status_md()}", outputs=secrets_md)
 
 
 if __name__ == "__main__":

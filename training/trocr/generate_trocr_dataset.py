@@ -64,10 +64,19 @@ class TrOCRDatasetGenerator:
     def _load_corpus(self, path: Optional[Path]) -> List[str]:
         if path and path.exists():
             lines = [line.strip() for line in path.read_text(encoding="utf-8").splitlines()]
-            lines = [l for l in lines if l and len(l) >= 2]
-            if lines:
-                print(f"Loaded {len(lines)} corpus lines from {path}")
-                return lines
+            # OCR-friendly: short, non-empty; reject obvious leftover markup
+            cleaned = []
+            for l in lines:
+                if not l or len(l) < 2:
+                    continue
+                if "[[" in l or "]]" in l or "<" in l or ">" in l or "{{" in l:
+                    continue
+                if len(l) > 64:
+                    l = l[:64]
+                cleaned.append(l)
+            if cleaned:
+                print(f"Loaded {len(cleaned)} corpus lines from {path}")
+                return cleaned
         print("Warning: Using built-in fallback Javanese corpus lines.")
         return DEFAULT_JAPANESE_FALLBACK_TEXT
 
@@ -223,7 +232,8 @@ class TrOCRDatasetGenerator:
 
 def main():
     parser = argparse.ArgumentParser(description="Generate Javanese TrOCR dataset formatted for AutoTrain Advanced.")
-    parser.add_argument("--corpus", type=Path, default=Path("../javanese_corpus_clean.txt"), help="Text corpus path.")
+    parser.add_argument("--corpus", type=Path, default=Path("../javanese_corpus_ocr.txt"),
+                        help="Text corpus path (prefer cleaned OCR corpus).")
     parser.add_argument("--fonts_dir", type=Path, default=Path("../fonts"), help="Directory containing TTF/OTF fonts.")
     parser.add_argument("--pdfs_dir", "--backgrounds_dir", "--images_dir",
                         dest="pdfs_dir", type=Path, default=Path("../pdfs"),
@@ -231,7 +241,10 @@ def main():
     parser.add_argument("--output_dir", type=Path, default=Path("../trocr_dataset"), help="Output directory for dataset.")
     parser.add_argument("--num_train", type=int, default=5000, help="Number of training samples.")
     parser.add_argument("--num_val", type=int, default=500, help="Number of validation samples.")
+    parser.add_argument("--seed", type=int, default=42)
     args = parser.parse_args()
+    random.seed(args.seed)
+    np.random.seed(args.seed)
 
     generator = TrOCRDatasetGenerator(
         corpus_path=args.corpus,
