@@ -68,6 +68,7 @@ import torch
 from PIL import Image
 from datasets import DatasetDict, Image as HFImage, load_dataset
 from transformers import (
+    TrainerCallback,
     Seq2SeqTrainer,
     Seq2SeqTrainingArguments,
     TrOCRProcessor,
@@ -228,6 +229,64 @@ class TrainConfig:
     resume_from_checkpoint: bool | str = False
     early_stopping_patience: int = 0  # 0 = disabled; NAS hands-off uses 3+
     load_best_model_at_end: bool = False
+    freeze_encoder: bool = False
+    # None = keep every epoch checkpoint on disk (needed for post-train scoring).
+    save_total_limit: Optional[int] = 2
+    hub_tag_epochs: bool = True  # tag Hub tip as epoch-N after each save
+
+
+class HubEpochTagCallback(TrainerCallback):
+    """After each epoch save/push, tag the Hub tip as epoch-N (root stays latest only)."""
+
+    def __init__(self, repo_id: str, token: str | None):
+        self.repo_id = repo_id
+        self.token = token
+
+    def on_save(self, args, state, control, **kwargs):
+        if not state.is_world_process_zero or not self.repo_id or not self.token:
+            return
+        if state.epoch is None:
+            return
+        epoch_i = int(round(float(state.epoch)))
+        if epoch_i < 1:
+            return
+        tag = f"epoch-{epoch_i}"
+        try:
+            from huggingface_hub import HfApi
+
+            api = HfApi(token=self.token)
+            # Move tag if this epoch is re-saved (resume).
+            try:
+                api.delete_tag(self.repo_id, tag=tag, repo_type="model")
+            except Exception:
+                pass
+            api.create_tag(
+                self.repo_id,
+                tag=tag,
+                repo_type="model",
+                tag_message=f"End of training epoch {epoch_i}",
+            )
+            print(f"[OK] Hub tag {tag} → {self.repo_id}", flush=True)
+        except Exception as exc:
+            print(f"[WARN] Hub tag {tag} failed: {exc}", flush=True)
+
+
+def _freeze_vision_encoder(model: VisionEncoderDecoderModel) -> None:
+    enc = getattr(model, "encoder", None)
+    if enc is None:
+        print("[WARN] model has no .encoder — freeze skipped", flush=True)
+        return
+    n = 0
+    for p in enc.parameters():
+        p.requires_grad = False
+        n += 1
+    trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    total = sum(p.numel() for p in model.parameters())
+    print(
+        f"[INFO] Froze vision encoder ({n} tensors). "
+        f"Trainable params: {trainable:,} / {total:,}",
+        flush=True,
+    )
 
 
 def _load_pdf_labeled(pdf_dir: Path, upsample: float = 1.0):
@@ -591,6 +650,9 @@ def train(config: TrainConfig) -> str:
     model.config.length_penalty = 1.0
     model.config.num_beams = config.num_beams
 
+    if config.freeze_encoder:
+        _freeze_vision_encoder(model)
+
     raw = build_dataset(config, hf_token)
 
     if config.push_dataset and hf_token:
@@ -625,14 +687,14 @@ def train(config: TrainConfig) -> str:
         }
         print(f"[INFO] Trained model will be pushed to: {hub_id} (hub_strategy=every_save)")
 
-    # Eval cadence: every N epochs. Prefer epoch-aligned eval when early-stopping /
-    # load_best is on so HF Trainer can pick the best checkpoint cleanly.
+    # Eval cadence: every N epochs. Prefer epoch-aligned eval (and always when saving
+    # per epoch) so Hub tags / post-train scoring line up with eval_loss logs.
     n_train = len(raw["train"])
     steps_per_epoch = max(1, (n_train + config.batch_size - 1) // config.batch_size)
     eval_every = max(1, int(config.eval_every_epochs))
-    use_epoch_eval = bool(config.load_best_model_at_end or config.early_stopping_patience > 0)
+    use_epoch_eval = True  # save_strategy=epoch; keep eval on the same boundary
     if config.predict_with_generate:
-        eval_strategy = "epoch" if use_epoch_eval else "steps"
+        eval_strategy = "epoch"
         eval_steps = steps_per_epoch * eval_every
         metrics_fn = compute_metrics
         print(
@@ -640,7 +702,7 @@ def train(config: TrainConfig) -> str:
             f"this is slow on TrOCR."
         )
     else:
-        eval_strategy = "epoch" if use_epoch_eval else "steps"
+        eval_strategy = "epoch"
         eval_steps = steps_per_epoch * eval_every
         metrics_fn = None
         print(
@@ -669,7 +731,7 @@ def train(config: TrainConfig) -> str:
         "eval_strategy": eval_strategy,
         "eval_steps": eval_steps,
         "save_strategy": "epoch",
-        "save_total_limit": 3 if config.load_best_model_at_end else 2,
+        "save_total_limit": config.save_total_limit,
         "load_best_model_at_end": bool(config.load_best_model_at_end),
         "metric_for_best_model": "eval_loss",
         "greater_is_better": False,
@@ -706,6 +768,9 @@ def train(config: TrainConfig) -> str:
             f"[INFO] EarlyStopping patience={config.early_stopping_patience} on eval_loss",
             flush=True,
         )
+    if config.push_to_hub and hub_id and config.hub_tag_epochs:
+        callbacks.append(HubEpochTagCallback(hub_id, hf_token))
+        print(f"[INFO] Hub epoch tags enabled on {hub_id}", flush=True)
 
     trainer = Seq2SeqTrainer(
         model=model,
@@ -877,6 +942,22 @@ def parse_args() -> TrainConfig:
         action="store_true",
         help="Keep best eval_loss checkpoint as the final model.",
     )
+    p.add_argument(
+        "--freeze_encoder",
+        action="store_true",
+        help="Freeze the vision encoder; train decoder (+ cross-attn) only.",
+    )
+    p.add_argument(
+        "--save_total_limit",
+        type=int,
+        default=None,
+        help="Max checkpoints kept on disk. Omit/0 = keep all epoch checkpoints.",
+    )
+    p.add_argument(
+        "--no_hub_tag_epochs",
+        action="store_true",
+        help="Do not create Hub tags epoch-N after each epoch push.",
+    )
     a = p.parse_args()
 
     if a.dataset_dir is None and a.dataset_name is None:
@@ -896,6 +977,9 @@ def parse_args() -> TrainConfig:
         resume = True
     elif a.resume_from_checkpoint:
         resume = a.resume_from_checkpoint
+    save_limit = a.save_total_limit
+    if save_limit is not None and int(save_limit) <= 0:
+        save_limit = None
 
     return TrainConfig(
         base_model=a.base_model,
@@ -930,6 +1014,9 @@ def parse_args() -> TrainConfig:
         resume_from_checkpoint=resume,
         early_stopping_patience=patience,
         load_best_model_at_end=load_best,
+        freeze_encoder=bool(a.freeze_encoder),
+        save_total_limit=save_limit,
+        hub_tag_epochs=not bool(a.no_hub_tag_epochs),
     )
 
 

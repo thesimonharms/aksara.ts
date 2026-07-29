@@ -27,10 +27,17 @@ N = int(os.environ.get("N_SAMPLES", "1500"))
 LOG_EVERY = int(os.environ.get("LOG_EVERY", "50"))
 
 
-def cer(pred: str, ref: str) -> float:
-    if not ref:
-        return 0.0 if not pred else 1.0
+# Near-match = Levenshtein edit distance <= CLOSE_MAX (default 2).
+CLOSE_MAX = int(os.environ.get("CLOSE_MAX", "2"))
+
+
+def edit_distance(pred: str, ref: str) -> int:
+    """Unicode-codepoint Levenshtein distance."""
     a, b = pred, ref
+    if not a:
+        return len(b)
+    if not b:
+        return len(a)
     dp = list(range(len(b) + 1))
     for i, ca in enumerate(a, 1):
         prev, dp[0] = dp[0], i
@@ -41,7 +48,14 @@ def cer(pred: str, ref: str) -> float:
             else:
                 dp[j] = 1 + min(prev, dp[j], dp[j - 1])
             prev = cur
-    return dp[-1] / max(1, len(b))
+    return dp[-1]
+
+
+def cer(pred: str, ref: str) -> float:
+    if not ref:
+        return 0.0 if not pred else 1.0
+    return edit_distance(pred, ref) / max(1, len(ref))
+
 
 
 def to_rgb(img) -> Image.Image:
@@ -88,7 +102,8 @@ def main() -> None:
     print(f"[INFO] Scoring {n} / {len(ds)} {SPLIT} examples", flush=True)
 
     scores: list[float] = []
-    exact = 0
+    exact = 0  # edit distance 0
+    close = 0  # edit distance 1..CLOSE_MAX (near-match, not exact)
     len_ratios: list[float] = []
     short_scores: list[float] = []  # ref len <= 8
     long_scores: list[float] = []
@@ -110,10 +125,15 @@ def main() -> None:
                 use_cache=True,
             )
             pred = processor.batch_decode(ids, skip_special_tokens=True)[0].strip()
-            score = cer(pred, ref)
+            dist = edit_distance(pred, ref)
+            score = 0.0 if not ref and not pred else (
+                1.0 if not ref else dist / max(1, len(ref))
+            )
             scores.append(score)
-            if pred == ref:
+            if dist == 0:
                 exact += 1
+            elif dist <= CLOSE_MAX:
+                close += 1
             if ref:
                 len_ratios.append(len(pred) / len(ref))
             if len(ref) <= 8:
@@ -126,9 +146,12 @@ def main() -> None:
                 rate = (i + 1) / max(elapsed, 1e-6)
                 eta = (n - i - 1) / max(rate, 1e-6)
                 mean = sum(scores) / len(scores)
+                near = exact + close
                 print(
                     f"[PROG] {i+1}/{n} mean_CER={mean:.4f} "
                     f"exact={exact/(i+1):.2%} "
+                    f"close(<={CLOSE_MAX})={close/(i+1):.2%} "
+                    f"total_near={near/(i+1):.2%} "
                     f"{rate:.2f} samp/s ETA={eta/60:.1f}m",
                     flush=True,
                 )
@@ -137,9 +160,19 @@ def main() -> None:
     sorted_s = sorted(scores)
     p50 = sorted_s[len(sorted_s) // 2]
     p90 = sorted_s[int(len(sorted_s) * 0.9)]
+    near = exact + close
     print("\n=== Summary ===", flush=True)
     print(f"[OK] n={n} mean CER={mean:.4f}", flush=True)
-    print(f"[OK] exact-match={exact/n:.2%}", flush=True)
+    print(f"[OK] exact-match (dist=0)={exact/n:.2%} ({exact}/{n})", flush=True)
+    print(
+        f"[OK] close-match (dist=1..{CLOSE_MAX})={close/n:.2%} ({close}/{n})",
+        flush=True,
+    )
+    print(
+        f"[OK] total near-match (exact+close, dist<={CLOSE_MAX})="
+        f"{near/n:.2%} ({near}/{n})",
+        flush=True,
+    )
     print(f"[OK] CER p50={p50:.4f} p90={p90:.4f}", flush=True)
     if len_ratios:
         print(
@@ -148,7 +181,7 @@ def main() -> None:
         )
     if short_scores:
         print(
-            f"[OK] short(≤8) n={len(short_scores)} mean CER={sum(short_scores)/len(short_scores):.4f}",
+            f"[OK] short(<=8) n={len(short_scores)} mean CER={sum(short_scores)/len(short_scores):.4f}",
             flush=True,
         )
     if long_scores:
