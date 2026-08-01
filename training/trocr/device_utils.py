@@ -20,11 +20,35 @@ def cuda_available() -> bool:
     return bool(torch.cuda.is_available())
 
 
+def dml_available() -> bool:
+    try:
+        import torch_directml  # type: ignore
+
+        return bool(torch_directml.device_count() > 0)
+    except Exception:
+        return False
+
+
+def resolve_torch_device(device: str | None = None):
+    """Return a torch.device / DirectML device handle for model.to(...)."""
+    d = device or pick_device()
+    if d in ("dml", "privateuseone"):
+        import torch_directml  # type: ignore
+
+        return torch_directml.device()
+    return torch.device(d)
+
+
 def pick_device() -> str:
+    force = os.environ.get("FORCE_DEVICE", "").strip().lower()
+    if force in ("cpu", "cuda", "xpu", "dml", "privateuseone"):
+        return "dml" if force == "privateuseone" else force
     if xpu_available():
         return "xpu"
     if cuda_available():
         return "cuda"
+    if dml_available():
+        return "dml"
     return "cpu"
 
 
@@ -40,6 +64,13 @@ def device_name(device: str | None = None) -> str:
             return torch.cuda.get_device_name(0)
         except Exception:
             return "CUDA GPU"
+    if d == "dml":
+        try:
+            import torch_directml  # type: ignore
+
+            return torch_directml.device_name(0)
+        except Exception:
+            return "DirectML"
     return "CPU"
 
 

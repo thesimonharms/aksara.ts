@@ -1,22 +1,24 @@
-# NAS / Docker hands-off TrOCR v2 (Intel Arc XPU)
+# NAS / Docker hands-off TrOCR v4 (Intel XPU)
 
-Fire-and-forget fine-tune on dad’s Linux NAS once SSH + Arc (B70 via OcuLink
-and/or onboard Arc) are available. **Starts from Hub v1**, mixes original + 180k
-+ NusaAksara data, trains up to 15 epochs with early stopping, and pushes the
-**best** checkpoint to `thesimonharms/trocr-javanese-synthetic-v2` (overwrite).
+Fire-and-forget fine-tune on the NAS. **v4** starts from
+`microsoft/trocr-large-printed` (printed prior for synthetic Aksara), expands the
+Javanese tokenizer, freezes the encoder briefly, then unfreezes — Hub id
+`thesimonharms/trocr-javanese-synthetic-v4`.
 
-You should not need to say “do another epoch.”
+Mid-train free-gen gates: on the laptop, `.\sniff_hub_epoch.ps1 -Revision epoch-N`
+(DirectML). Do not steal the NAS XPU for long verifies while training.
 
-## Recipe (why this one)
+## Recipe (v4)
 
 | Choice | Value | Why |
 |--------|--------|-----|
-| Base | `…-synthetic` (**v1**) | v2 continue-FT twice *hurt* CER even on 180k-val |
-| Data | 180k + original (`×1`) + Nusa (`×8`) | Replay scoreboard domain + new unique lines + real OCR |
-| LR | `1e-5` | Continue-FT at `2e-5` walked off v1’s basin |
-| Epochs | 15 max, early-stop patience 3 on `eval_loss` | Hands-off; stops when val loss stalls |
-| Push | every epoch + final best → Hub **v2** | Survive reboots; one Hub id to watch |
-| Device | auto-pick discrete XPU (max VRAM, non-iGPU) | NAS may expose iGPU + OcuLink B70 |
+| Base | `microsoft/trocr-large-printed` | Printed prior matches synthetic lines; large capacity |
+| Data | original ×6 + Nusa ×8 + 180k ×1 | Scoreboard domain upweighted |
+| Phase A | 2 ep, freeze encoder, LR `3e-5` | New tokens need decoder learning first (~42h/ep @ batch 8) |
+| Phase B | 3 ep, unfreeze, LR `1e-5` | Rewire vision to Aksara (wall-clock fit) |
+| Push | every epoch + `epoch-N` tags → Hub **v4** | Scoreboard escape hatch |
+| Device | **NAS iGPU XPU only** (`/dev/dri`) | Do not train on the laptop |
+| Mid-train gate | Laptop DirectML sniff only (`sniff_hub_epoch.ps1`) | Optional free-gen check; never steals NAS XPU |
 
 Expected: Linux XPU + B70 should be **much** faster than Windows eGPU B60
 (~1.7 it/s eager/fp32). First bring-up may still need `TROCR_ATTN=eager` /

@@ -14,6 +14,12 @@ case "$cmd" in
   train-v3|v3|handsoff-v3)
     exec train_v3_handsoff.sh "$@"
     ;;
+  train-v4|v4|handsoff-v4)
+    exec train_v4_handsoff.sh "$@"
+    ;;
+  smoke-v4|smoke_v4)
+    exec smoke_v4_batch.sh "$@"
+    ;;
   smoke)
     # Tiny sanity: XPU matmul + one Trainer step worth of imports.
     python - <<'PY'
@@ -31,7 +37,7 @@ PY
     exec bash "$@"
     ;;
   *)
-    echo "Usage: entrypoint.sh [detect|train|train-v3|smoke|bash]"
+    echo "Usage: entrypoint.sh [detect|train|train-v3|train-v4|smoke|smoke-v4|bash]"
     exec "$cmd" "$@"
     ;;
 esac

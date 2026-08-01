@@ -25,11 +25,14 @@ ENV PYTHONUNBUFFERED=1 \
     TRANSFORMERS_CACHE=/workspace/hf-cache \
     HUGGINGFACE_HUB_CACHE=/workspace/hf-cache
 
-COPY entrypoint.sh detect_gpu.sh train_v2_handsoff.sh train_v3_handsoff.sh /usr/local/bin/
+COPY entrypoint.sh detect_gpu.sh train_v2_handsoff.sh train_v3_handsoff.sh \
+     train_v4_handsoff.sh smoke_v4_batch.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/entrypoint.sh \
               /usr/local/bin/detect_gpu.sh \
               /usr/local/bin/train_v2_handsoff.sh \
-              /usr/local/bin/train_v3_handsoff.sh
+              /usr/local/bin/train_v3_handsoff.sh \
+              /usr/local/bin/train_v4_handsoff.sh \
+              /usr/local/bin/smoke_v4_batch.sh
 
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
-CMD ["train-v3"]
+CMD ["train-v4"]

@@ -1,9 +1,9 @@
-# Hands-off TrOCR v3 (freeze→unfreeze→score) on NAS Intel XPU.
+# Hands-off TrOCR v4 (large-printed freeze→unfreeze→score) on NAS Intel XPU.
 services:
   trocr-train:
     build: .
     image: aksara-trocr-xpu:latest
-    container_name: aksara-trocr-v3
+    container_name: aksara-trocr-v4
     devices:
       - /dev/dri:/dev/dri
     group_add:
@@ -15,16 +15,17 @@ services:
     environment:
       HF_TOKEN: ${HF_TOKEN}
       HF_USERNAME: ${HF_USERNAME:-thesimonharms}
-      BASE_MODEL: ${BASE_MODEL:-thesimonharms/trocr-javanese-synthetic}
-      HUB_MODEL_ID: ${HUB_MODEL_ID:-thesimonharms/trocr-javanese-synthetic-v3}
-      DATASET_NAME: ${DATASET_NAME:-thesimonharms/javanese-dataset-180k}
-      EXTRA_DATASETS: ${EXTRA_DATASETS:-thesimonharms/javanese-dataset,thesimonharms/javanese-nusaaksara-ocr}
-      EXTRA_UPSAMPLE: ${EXTRA_UPSAMPLE:-2,8}
-      STAGE_A_EPOCHS: ${STAGE_A_EPOCHS:-30}
-      STAGE_B_EPOCHS: ${STAGE_B_EPOCHS:-14}
-      STAGE_A_LR: ${STAGE_A_LR:-5e-6}
-      STAGE_B_LR: ${STAGE_B_LR:-2e-6}
-      TROCR_BATCH_SIZE: ${TROCR_BATCH_SIZE:-36}
+      BASE_MODEL: ${BASE_MODEL:-microsoft/trocr-large-printed}
+      HUB_MODEL_ID: ${HUB_MODEL_ID:-thesimonharms/trocr-javanese-synthetic-v4}
+      DATASET_NAME: ${DATASET_NAME:-thesimonharms/javanese-dataset}
+      EXTRA_DATASETS: ${EXTRA_DATASETS:-thesimonharms/javanese-dataset,thesimonharms/javanese-nusaaksara-ocr,thesimonharms/javanese-dataset-180k}
+      EXTRA_UPSAMPLE: ${EXTRA_UPSAMPLE:-5,8,1}
+      STAGE_A_EPOCHS: ${STAGE_A_EPOCHS:-2}
+      STAGE_B_EPOCHS: ${STAGE_B_EPOCHS:-3}
+      STAGE_A_LR: ${STAGE_A_LR:-3e-5}
+      STAGE_B_LR: ${STAGE_B_LR:-1e-5}
+      TROCR_BATCH_SIZE: ${TROCR_BATCH_SIZE:-8}
+      GRADIENT_CHECKPOINTING: ${GRADIENT_CHECKPOINTING:-1}
       N_SCORE: ${N_SCORE:-1500}
     volumes:
       - /volume1/docker/aksara-trocr/trocr:/workspace/trocr:ro
@@ -32,4 +33,4 @@ services:
       - /volume1/docker/aksara-trocr/hf-cache:/workspace/hf-cache
       - /volume1/docker/aksara-trocr/logs:/workspace/logs
     restart: on-failure
-    command: ["train-v3"]
+    command: ["train-v4"]

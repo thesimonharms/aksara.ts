@@ -100,3 +100,4 @@ training/fonts/*
 *.otf
 *.woff
 *.woff2
+training/trocr/.venv-dml/

@@ -18,9 +18,10 @@ from datasets import Image as HFImage, load_dataset
 from PIL import Image
 from transformers import TrOCRProcessor, VisionEncoderDecoderModel
 
-from device_utils import attn_implementation, pick_device
+from device_utils import attn_implementation, pick_device, resolve_torch_device
 
 MODEL_ID = os.environ.get("HUB_MODEL_ID", "thesimonharms/trocr-javanese-synthetic-v2")
+MODEL_REVISION = os.environ.get("HUB_REVISION") or None
 DATASET_ID = os.environ.get("DATASET_NAME", "thesimonharms/javanese-dataset")
 SPLIT = os.environ.get("VERIFY_SPLIT", "validation")
 N = int(os.environ.get("N_SAMPLES", "1500"))
@@ -73,13 +74,42 @@ def to_rgb(img) -> Image.Image:
 
 def main() -> None:
     token = os.environ.get("HF_TOKEN") or os.environ.get("HUGGING_FACE_HUB_TOKEN")
-    device = pick_device()
-    print(f"[INFO] device={device} model={MODEL_ID} split={SPLIT} N={N}", flush=True)
+    device_kind = pick_device()
+    device = resolve_torch_device(device_kind)
+    rev = f"@{MODEL_REVISION}" if MODEL_REVISION else ""
+    print(
+        f"[INFO] device={device_kind} ({device}) model={MODEL_ID}{rev} "
+        f"split={SPLIT} N={N}",
+        flush=True,
+    )
 
-    processor = TrOCRProcessor.from_pretrained(MODEL_ID, token=token)
+    if device_kind == "dml":
+        # transformers.generate() is decorated with torch.inference_mode(),
+        # which breaks DirectML ("Cannot set version_counter for inference tensor").
+        class _NoInferenceMode:
+            def __init__(self, *args, **kwargs):
+                pass
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+            def __call__(self, fn=None):
+                return self if fn is None else fn
+
+        torch.inference_mode = _NoInferenceMode  # type: ignore[misc]
+
+    pre_kw: dict = {"token": token}
+    if MODEL_REVISION:
+        pre_kw["revision"] = MODEL_REVISION
+    processor = TrOCRProcessor.from_pretrained(MODEL_ID, **pre_kw)
     load_kw: dict = {"token": token}
+    if MODEL_REVISION:
+        load_kw["revision"] = MODEL_REVISION
     attn = attn_implementation()
-    if attn:
+    if attn and device_kind != "dml":
         load_kw["attn_implementation"] = attn
         print(f"[INFO] attn_implementation={attn}", flush=True)
     model = VisionEncoderDecoderModel.from_pretrained(MODEL_ID, **load_kw)
@@ -109,12 +139,17 @@ def main() -> None:
     long_scores: list[float] = []
     t0 = time.time()
 
-    with torch.inference_mode():
+    # DirectML breaks under inference_mode ("version_counter for inference tensor").
+    _ctx = torch.no_grad if device_kind == "dml" else torch.inference_mode
+    with _ctx():
         for i in range(n):
             ex = ds[i]
             image = to_rgb(ex["image"])
             ref = (ex.get("text") or ex.get("label") or "").strip()
             pv = processor(images=image, return_tensors="pt").pixel_values.to(device)
+            if device_kind == "dml":
+                # Avoid inference-tensor version_counter errors on DirectML.
+                pv = pv.clone()
             ids = model.generate(
                 pv,
                 max_new_tokens=64,
