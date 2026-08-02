@@ -77,7 +77,13 @@ from transformers import (
 
 # Prefer sibling device_utils locally; keep inline fallback for HF Jobs (single-file stage).
 try:
-    from device_utils import attn_implementation, dataloader_kwargs, log_device, use_amp
+    from device_utils import (
+        attn_implementation,
+        dataloader_kwargs,
+        log_device,
+        pick_device,
+        use_amp,
+    )
 except ImportError:  # pragma: no cover — Jobs flat layout
 
     def log_device() -> str:
@@ -100,6 +106,19 @@ except ImportError:  # pragma: no cover — Jobs flat layout
             "dataloader_num_workers": 2 if cuda else 0,
             "dataloader_pin_memory": bool(cuda),
         }
+
+    def pick_device() -> str:
+        return "cuda" if torch.cuda.is_available() else "cpu"
+
+try:
+    from transformers_xpu_helper import ultra_255h_config
+    from transformers_xpu_helper.trainer import build_seq2seq_training_arguments
+
+    _HAS_XPU_HELPER = True
+except ImportError:  # pragma: no cover
+    _HAS_XPU_HELPER = False
+    ultra_255h_config = None  # type: ignore
+    build_seq2seq_training_arguments = None  # type: ignore
 
 # Javanese block — whole characters added to the BPE vocab so free-run generation
 # does not scramble UTF-8 byte tokens (see expand_javanese_tokenizer.py).
@@ -745,6 +764,8 @@ def train(config: TrainConfig) -> str:
         **dataloader_kwargs(),
         "gradient_checkpointing": use_gc,
         "remove_unused_columns": False,
+        # TrOCR + XPU: keep compile off until smoke-proven on the SKU.
+        "torch_compile": False,
         **hub_kwargs,
     }
     if eval_strategy != "steps":
@@ -753,7 +774,43 @@ def train(config: TrainConfig) -> str:
         train_kwargs["max_steps"] = int(config.max_steps)
         print(f"[INFO] max_steps={config.max_steps} (smoke cap)")
 
-    args = Seq2SeqTrainingArguments(**train_kwargs)
+    if (
+        _HAS_XPU_HELPER
+        and build_seq2seq_training_arguments is not None
+        and ultra_255h_config is not None
+        and pick_device() == "xpu"
+    ):
+        xpu_cfg = ultra_255h_config(
+            torch_compile=False,
+            gradient_checkpointing=use_gc,
+            per_device_train_batch_size=config.batch_size,
+            per_device_eval_batch_size=min(config.eval_batch_size, config.batch_size),
+            # TrOCR cooks use micro-batch only; helper's default accum=4 would
+            # silently 4× the effective batch and shrink steps/epoch.
+            gradient_accumulation_steps=1,
+        )
+        # Drop keys the factory already sets from xpu_cfg so overrides stay authoritative.
+        override_kwargs = {
+            k: v
+            for k, v in train_kwargs.items()
+            if k
+            not in {
+                "output_dir",
+                "per_device_train_batch_size",
+                "per_device_eval_batch_size",
+                "gradient_checkpointing",
+                "torch_compile",
+            }
+        }
+        args = build_seq2seq_training_arguments(
+            str(config.output_dir),
+            config=xpu_cfg,
+            **override_kwargs,
+        )
+        print("[INFO] Seq2SeqTrainingArguments via transformers-xpu-helper", flush=True)
+    else:
+        train_kwargs.pop("torch_compile", None)
+        args = Seq2SeqTrainingArguments(**train_kwargs)
 
     callbacks = []
     if config.early_stopping_patience and config.early_stopping_patience > 0:

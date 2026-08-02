@@ -18,3 +18,4 @@ jiwer>=3.0
 pillow>=10.0
 PyMuPDF>=1.24
 huggingface_hub[hf_xet]>=0.24
+transformers-xpu-helper[transformers] @ git+https://github.com/thesimonharms/transformers-xpu-helper.git

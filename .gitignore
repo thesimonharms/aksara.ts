@@ -49,6 +49,11 @@ training/jv_plain_sub.txt
 training/train.log
 training/trocr/trocr_dataset/
 training/trocr/trocr_dataset_1m/
+training/trocr/trocr_dataset_hq/
+training/trocr/trocr_dataset_hq_smoke/
+training/trocr/hub_export_javanese_synthetic_hq/
+training/corpus_hq/
+PRIVATE_ROADMAP.md
 training/trocr/trocr_ckpt/
 training/trocr/checkpoint-*/
 training/trocr/final/

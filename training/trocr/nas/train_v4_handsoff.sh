@@ -25,19 +25,31 @@ DATASET_NAME="${DATASET_NAME:-thesimonharms/javanese-dataset}"
 EXTRA_DATASETS="${EXTRA_DATASETS:-thesimonharms/javanese-dataset,thesimonharms/javanese-nusaaksara-ocr,thesimonharms/javanese-dataset-180k}"
 EXTRA_UPSAMPLE="${EXTRA_UPSAMPLE:-5,8,1}"
 
-STAGE_A_EPOCHS="${STAGE_A_EPOCHS:-3}"
-STAGE_B_EPOCHS="${STAGE_B_EPOCHS:-10}"
+STAGE_A_EPOCHS="${STAGE_A_EPOCHS:-2}"
+STAGE_B_EPOCHS="${STAGE_B_EPOCHS:-3}"
 STAGE_A_LR="${STAGE_A_LR:-3e-5}"
 STAGE_B_LR="${STAGE_B_LR:-1e-5}"
 WARMUP_RATIO="${WARMUP_RATIO:-0.05}"
 
 if [[ -z "${BATCH_SIZE:-}" ]]; then
-  BATCH_SIZE="${TROCR_BATCH_SIZE:-8}"
+  if [[ -f /workspace/output/trocr_v4_smoke/best_batch.txt ]]; then
+    BATCH_SIZE="$(tr -d '[:space:]' </workspace/output/trocr_v4_smoke/best_batch.txt)"
+    echo "[train] batch from smoke best_batch.txt=$BATCH_SIZE"
+  elif [[ -n "${TROCR_BATCH_SIZE:-}" ]]; then
+    BATCH_SIZE="$TROCR_BATCH_SIZE"
+  else
+    BATCH_SIZE="$(python -c 'from device_utils import recommend_batch_size; print(recommend_batch_size())')"
+    echo "[train] batch from xpu-helper/heuristic=$BATCH_SIZE"
+  fi
 fi
 
-# Large printed often needs GC on iGPU; override with GRADIENT_CHECKPOINTING=0
+# Large printed often needs GC on iGPU; smoke may write best_gc.txt
+if [[ -f /workspace/output/trocr_v4_smoke/best_gc.txt ]]; then
+  GRADIENT_CHECKPOINTING="$(tr -d '[:space:]' </workspace/output/trocr_v4_smoke/best_gc.txt)"
+fi
+GRADIENT_CHECKPOINTING="${GRADIENT_CHECKPOINTING:-1}"
 GC_FLAG=(--gradient_checkpointing)
-if [[ "${GRADIENT_CHECKPOINTING:-1}" == "0" ]]; then
+if [[ "$GRADIENT_CHECKPOINTING" == "0" ]]; then
   GC_FLAG=(--no-gradient_checkpointing)
 fi
 

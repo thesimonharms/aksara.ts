@@ -16,7 +16,8 @@ RUN python -m pip install --no-cache-dir -U pip \
       "sentencepiece>=0.2.0" \
       "python-dotenv>=1.0" \
       "pillow>=10.0" \
-      "huggingface_hub[hf_xet]>=0.24"
+      "huggingface_hub[hf_xet]>=0.24" \
+      "transformers-xpu-helper[transformers] @ git+https://github.com/thesimonharms/transformers-xpu-helper.git"
 
 # Repo training code is bind-mounted at runtime to /workspace/trocr
 ENV PYTHONUNBUFFERED=1 \

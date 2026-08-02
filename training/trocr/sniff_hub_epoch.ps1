@@ -13,7 +13,7 @@ $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $py = Join-Path $root ".venv-dml\Scripts\python.exe"
 if (-not (Test-Path $py)) {
-  throw "Missing DirectML venv at $py — create .venv-dml with torch-directml first."
+  throw "Missing DirectML venv at $py - create .venv-dml with torch-directml first."
 }
 
 $env:FORCE_DEVICE = "dml"
