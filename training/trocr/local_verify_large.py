@@ -19,6 +19,7 @@ from PIL import Image
 from transformers import TrOCRProcessor, VisionEncoderDecoderModel
 
 from device_utils import attn_implementation, pick_device, resolve_torch_device
+from generation_utils import anti_loop_enabled, trocr_generate
 
 MODEL_ID = os.environ.get("HUB_MODEL_ID", "thesimonharms/trocr-javanese-synthetic-v2")
 MODEL_REVISION = os.environ.get("HUB_REVISION") or None
@@ -79,7 +80,7 @@ def main() -> None:
     rev = f"@{MODEL_REVISION}" if MODEL_REVISION else ""
     print(
         f"[INFO] device={device_kind} ({device}) model={MODEL_ID}{rev} "
-        f"split={SPLIT} N={N}",
+        f"split={SPLIT} N={N} anti_loop={anti_loop_enabled()}",
         flush=True,
     )
 
@@ -150,14 +151,12 @@ def main() -> None:
             if device_kind == "dml":
                 # Avoid inference-tensor version_counter errors on DirectML.
                 pv = pv.clone()
-            ids = model.generate(
+            ids = trocr_generate(
+                model,
+                processor,
                 pv,
-                max_new_tokens=64,
+                image=image,
                 num_beams=1,
-                do_sample=False,
-                decoder_start_token_id=cls_id,
-                no_repeat_ngram_size=0,
-                use_cache=True,
             )
             pred = processor.batch_decode(ids, skip_special_tokens=True)[0].strip()
             dist = edit_distance(pred, ref)

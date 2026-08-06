@@ -9,7 +9,7 @@ param(
   [string]$Dataset = "thesimonharms/javanese-dataset"
 )
 
-$ErrorActionPreference = "Stop"
+$ErrorActionPreference = "Continue"
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $py = Join-Path $root ".venv-dml\Scripts\python.exe"
 if (-not (Test-Path $py)) {

@@ -660,6 +660,10 @@ def train(config: TrainConfig) -> str:
         model.generation_config.eos_token_id = processor.tokenizer.sep_token_id
         model.generation_config.max_length = config.max_target_length
         model.generation_config.early_stopping = True
+        # Keep ngram=0: historically ngram=3 broke byte-level BPE free-gen.
+        # Atomic Javanese vocab still uses ngram=0; free-gen anti-runaway
+        # (cecak/sandhangan loops) is applied at score time via
+        # generation_utils.NoRunawayMarksLogitsProcessor — not serializable here.
         model.generation_config.no_repeat_ngram_size = 0
         model.generation_config.length_penalty = 1.0
         model.generation_config.num_beams = config.num_beams

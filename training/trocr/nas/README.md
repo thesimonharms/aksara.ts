@@ -8,6 +8,12 @@ Javanese tokenizer, freezes the encoder briefly, then unfreezes — Hub id
 Mid-train free-gen gates: on the laptop, `.\sniff_hub_epoch.ps1 -Revision epoch-N`
 (DirectML). Do not steal the NAS XPU for long verifies while training.
 
+**Free-gen scoring:** `local_verify_large.py` / `score_epoch_checkpoints.py` attach
+`generation_utils.NoRunawayMarksLogitsProcessor` at inference time (blocks cecak /
+sandhangan runaway loops). Teacher-forced `eval_loss` mid-train is unchanged.
+`no_repeat_ngram_size` stays `0` in saved `generation_config` (byte-BPE footgun).
+Set `ANTI_LOOP=0` to reproduce unguarded generate().
+
 ## Recipe (v4)
 
 | Choice | Value | Why |

@@ -24,6 +24,7 @@ from PIL import Image
 from transformers import TrOCRProcessor, VisionEncoderDecoderModel
 
 from device_utils import attn_implementation, pick_device
+from generation_utils import anti_loop_enabled, trocr_generate
 from local_verify_large import CLOSE_MAX, edit_distance, to_rgb
 
 
@@ -51,20 +52,19 @@ def score_checkpoint(
     scores: list[float] = []
     exact = close = 0
     t0 = time.time()
+    print(f"  [{Path(model_path).name}] anti_loop={anti_loop_enabled()}", flush=True)
     with torch.inference_mode():
         for i in range(n):
             ex = ds[i]
             image = to_rgb(ex["image"])
             ref = (ex.get("text") or ex.get("label") or "").strip()
             pv = processor(images=image, return_tensors="pt").pixel_values.to(device)
-            ids = model.generate(
+            ids = trocr_generate(
+                model,
+                processor,
                 pv,
-                max_new_tokens=64,
+                image=image,
                 num_beams=1,
-                do_sample=False,
-                decoder_start_token_id=cls_id,
-                no_repeat_ngram_size=0,
-                use_cache=True,
             )
             pred = processor.batch_decode(ids, skip_special_tokens=True)[0].strip()
             dist = edit_distance(pred, ref)

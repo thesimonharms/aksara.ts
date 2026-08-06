@@ -46,6 +46,7 @@ from PIL import Image
 from transformers import TrOCRProcessor, VisionEncoderDecoderModel
 
 from device_utils import attn_implementation, pick_device
+from generation_utils import anti_loop_enabled, trocr_generate
 
 MODEL_ID = os.environ.get("HUB_MODEL_ID", "thesimonharms/trocr-javanese-synthetic")
 # Repo root holds the expanded-tokenizer checkpoint (vocab ~50361).
@@ -262,13 +263,35 @@ def main() -> None:
 
             for mode in modes:
                 if mode == "baseline":
-                    kw = gen_kwargs_baseline(cls_id)
-                    meta = {"chars_est": estimate_char_budget(image), "max_tok": 64}
+                    ids = trocr_generate(
+                        model,
+                        processor,
+                        pixel_values,
+                        image=image,
+                        num_beams=1,
+                    )
+                    meta = {
+                        "chars_est": estimate_char_budget(image),
+                        "max_tok": 64,
+                        "anti_loop": anti_loop_enabled(),
+                    }
                 else:
                     kw = gen_kwargs_tweak(image, cls_id, tokens_per_char)
                     meta = kw.pop("_meta")
+                    meta["anti_loop"] = anti_loop_enabled()
+                    # Keep tweak beams/length_penalty; still attach anti-loop.
+                    ids = trocr_generate(
+                        model,
+                        processor,
+                        pixel_values,
+                        image=image,
+                        max_new_tokens=kw.get("max_new_tokens"),
+                        num_beams=kw.get("num_beams", 4),
+                        min_new_tokens=kw.get("min_new_tokens"),
+                        length_penalty=kw.get("length_penalty", 1.0),
+                        early_stopping=kw.get("early_stopping", True),
+                    )
 
-                ids = model.generate(pixel_values, **kw)
                 pred = processor.batch_decode(ids, skip_special_tokens=True)[0].strip()
                 score = cer(pred, ref)
                 len_ratio = (len(pred) / len(ref)) if ref else (0.0 if not pred else 1.0)
