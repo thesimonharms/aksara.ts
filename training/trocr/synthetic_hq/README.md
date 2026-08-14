@@ -1,10 +1,8 @@
 # Synthetic HQ Javanese Aksara OCR dataset
 
-Higher-quality **synthetic** line data for a future cook after v4. Fonts are
-already exhausted; this pipeline spends variety budget on **length mix**,
+Higher-quality **synthetic** line data for the v5 cook. Fonts are already
+exhausted; this pipeline spends variety budget on **length mix**,
 **held-out text**, **backgrounds**, and **degrade augments**.
-
-**Do not run a full 500k build / Hub upload until explicitly asked.**
 
 ## Targets
 
@@ -43,7 +41,7 @@ HF private: thesimonharms/javanese-synthetic-hq
 - CRNN-grade degrade: Gaussian + S&P noise, ink bleed/erosion, JPEG recompress, mild aliasing
 - Quality gate: reject blank / low-contrast / border-clipped; retry up to 6×
 
-## Commands (scaffold — run when ready)
+## Commands
 
 ```bash
 cd training/trocr
@@ -56,12 +54,12 @@ python corpus_hq_prepare.py \
 # 2) Dry-run plans only (no images)
 python build_synthetic_hq.py --dry-run
 
-# 3) Full local render (long)
+# 3) Full local render (long; ~hours)
 python build_synthetic_hq.py \
   --num_train 500000 --num_val 5000 \
-  --workers 8 --seed 42
+  --workers 12 --seed 42
 
-# 4) Private Hub publish (explicit)
+# 4) Private Hub publish
 python build_synthetic_hq.py \
   --skip_generate --export-parquet --push \
   --repo_id thesimonharms/javanese-synthetic-hq
@@ -71,13 +69,14 @@ Uploads always call `create_repo(..., private=True)`. There is no `--public` pat
 
 ## Future cook consumption
 
-First cook on this set should be **hq ×1 only** (no upsample of old 60k/180k), so the new distribution is not drowned. Optionally add Nusa ×1 later as a real-domain sniff — keep HITL / Nusa as separate tracks.
-
-Example (later):
+**v5** trains on this set **hq ×1 only** (no upsample of old 60k/180k), so the
+new distribution is not drowned. Optionally add Nusa ×1 later as a real-domain
+sniff — keep HITL / Nusa / manuscript as separate tracks after synthetic is solid.
 
 ```bash
+# NAS: docker compose up -d trocr-train-v5
 DATASET_NAME=thesimonharms/javanese-synthetic-hq
-# no EXTRA_DATASETS / upsample until hq alone is scored
+# EXTRA_DATASETS empty
 ```
 
 ## Layout

@@ -1,13 +1,18 @@
 # TrOCR Fine-tune — Javanese Aksara
 
-Fine-tune `microsoft/trocr-base-handwritten` for Javanese Aksara OCR via the
-transformers `Seq2SeqTrainer` (AutoTrain Advanced is deprecated and never
-supported a VisionEncoderDecoder task).
+Current published model:
+[`thesimonharms/trocr-javanese-synthetic-v6`](https://huggingface.co/thesimonharms/trocr-javanese-synthetic-v6)
+(`microsoft/trocr-small-printed`, short clean synthetic lines, **96.0% exact
+match** / 0.68% CER on 1,500 held-out lines). Model card, limitations, and
+v1–v6 findings live on the Hub. Earlier Hub checkpoints (v1–v4) were deleted.
 
-This folder is the new home for the OCR training pipeline. The previous CRNN +
-CTC pipeline still works — its scripts are kept under
-[`../crnn/`](../crnn/) and the existing `training.sh` / `training.ps1`
-entries have been repointed there.
+This folder is the OCR training pipeline. The previous CRNN + CTC path still
+works — scripts under [`../crnn/`](../crnn/), invoked from `training.sh` /
+`training.ps1`. The npm package still ships that CRNN ONNX; TrOCR v6 is the
+research line-OCR model.
+
+v6 is **line OCR only**. Pad each crop to a square (`image_prep.pad_to_square`)
+before the 384×384 ViT. Do not feed pages.
 
 ## Layout
 
@@ -44,11 +49,10 @@ Setup + run commands: **[`jobs.md`](jobs.md)** (Local Intel Arc section first).
 
 Both Jobs and local share `finetune_trocr.py`. Verify scripts (`verify_trocr.py`,
 `local_verify_large.py`) auto-pick `xpu` when the Arc stack is installed.
+Default Hub ids in those scripts point at **v6** + `javanese-synthetic-exact`.
 
-**Licensing:** the Hub dataset (`javanese-dataset`) is pushed **private** by
-default — you can train on it, but it is not redistributed publicly. The
-fine-tuned **model** weights may still be published openly if that matches your
-goals.
+**Licensing:** the v6 train set (`javanese-synthetic-exact`) is **private**.
+The fine-tuned **model** is public (MIT).
 
 ## Secrets / .env
 
@@ -190,8 +194,8 @@ and pause the Space when idle.
 
 | Artifact | Default HF Hub id | Visibility |
 |----------|------|---|
-| Dataset  | `{HF_USERNAME}/javanese-dataset` (`push_dataset.py` / `--push_dataset`) | **Private** by default |
-| Model    | `{HF_USERNAME}/javanese-trocr-handwritten` (override with `--hub_model_id`) | Whatever you set on the model repo |
+| Dataset (v6) | `thesimonharms/javanese-synthetic-exact` | **Private** |
+| Model (v6)   | `thesimonharms/trocr-javanese-synthetic-v6` | Public (MIT) |
 
 ## Tips for improving the dataset
 

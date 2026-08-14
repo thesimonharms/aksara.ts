@@ -17,6 +17,24 @@ case "$cmd" in
   train-v4|v4|handsoff-v4)
     exec train_v4_handsoff.sh "$@"
     ;;
+  score-v4|score_v4)
+    export SCORE_ONLY=1
+    exec train_v4_handsoff.sh "$@"
+    ;;
+  train-v5|v5|handsoff-v5)
+    exec train_v5_handsoff.sh "$@"
+    ;;
+  score-v5|score_v5)
+    export SCORE_ONLY=1
+    exec train_v5_handsoff.sh "$@"
+    ;;
+  train-v6|v6|handsoff-v6)
+    exec train_v6_handsoff.sh "$@"
+    ;;
+  score-v6|score_v6)
+    export SCORE_ONLY=1
+    exec train_v6_handsoff.sh "$@"
+    ;;
   smoke-v4|smoke_v4)
     exec smoke_v4_batch.sh "$@"
     ;;
@@ -37,7 +55,7 @@ PY
     exec bash "$@"
     ;;
   *)
-    echo "Usage: entrypoint.sh [detect|train|train-v3|train-v4|smoke|smoke-v4|bash]"
+    echo "Usage: entrypoint.sh [detect|train|train-v3|train-v4|score-v4|train-v5|score-v5|train-v6|score-v6|smoke|smoke-v4|bash]"
     exec "$cmd" "$@"
     ;;
 esac

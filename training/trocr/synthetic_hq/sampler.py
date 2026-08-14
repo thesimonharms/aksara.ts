@@ -68,7 +68,11 @@ class StratifiedCorpus:
         return self.rng.choices(pool, weights=weights, k=1)[0]
 
     def plan(self, count: int, *, seed: int) -> list[SampleSpec]:
-        """Deterministic sample plan for resume-safe parallel render."""
+        """Deterministic sample plan for resume-safe parallel render.
+
+        O(count) — builds a shuffled multi-pass deck per bucket (unique-first,
+        then controlled repeats) instead of scanning the pool on every draw.
+        """
         rng = random.Random(seed)
         n_short = int(round(count * self.short_frac))
         n_long = int(round(count * self.long_frac))
@@ -76,38 +80,31 @@ class StratifiedCorpus:
         quotas = (["short"] * n_short) + (["mid"] * n_mid) + (["long"] * n_long)
         rng.shuffle(quotas)
 
-        # Prefer uniqueness: cycle through shuffled pools before heavy repeats.
-        pools = {
-            b: list(self.by_bucket[b])
-            for b in ("short", "mid", "long")
-        }
-        for b in pools:
-            rng.shuffle(pools[b])
-        cursors = {b: 0 for b in pools}
-        use_counts: dict[str, int] = {}
-        max_uses = max(1, math.ceil(count / max(1, sum(len(p) for p in pools.values()))))
+        # How many full passes over each bucket pool we need for this count.
+        total_pool = max(1, sum(len(p) for p in self.by_bucket.values()))
+        max_passes = max(1, math.ceil(count / total_pool) + 1)
+
+        decks: dict[str, list[dict]] = {}
+        cursors = {b: 0 for b in ("short", "mid", "long")}
+        for b in ("short", "mid", "long"):
+            base = list(self.by_bucket[b])
+            # Soft rare boost: duplicate rare rows once in the base deck.
+            boosted = list(base)
+            for r in base:
+                if r.get("rare"):
+                    boosted.append(r)
+            deck: list[dict] = []
+            for _ in range(max_passes):
+                pass_rows = list(boosted)
+                rng.shuffle(pass_rows)
+                deck.extend(pass_rows)
+            decks[b] = deck or [{"text": "ꦲ", "text_id": "fallback", "bucket": b, "rare": False}]
 
         specs: list[SampleSpec] = []
         for idx, bucket in enumerate(quotas):
-            # Walk pool until under max_uses or exhausted once.
-            chosen = None
-            for _ in range(len(pools[bucket]) + 1):
-                row = pools[bucket][cursors[bucket] % len(pools[bucket])]
-                cursors[bucket] += 1
-                tid = row.get("text_id") or row["text"]
-                if use_counts.get(tid, 0) < max_uses:
-                    chosen = row
-                    use_counts[tid] = use_counts.get(tid, 0) + 1
-                    break
-            if chosen is None:
-                # Soft rare-weighted fallback.
-                old = self.rng
-                self.rng = rng
-                chosen = self._pick_from_bucket(bucket)
-                self.rng = old
-                tid = chosen.get("text_id") or chosen["text"]
-                use_counts[tid] = use_counts.get(tid, 0) + 1
-
+            deck = decks[bucket]
+            chosen = deck[cursors[bucket] % len(deck)]
+            cursors[bucket] += 1
             specs.append(
                 SampleSpec(
                     idx=idx,

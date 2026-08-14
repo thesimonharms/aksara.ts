@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Hands-off v4: from-scratch microsoft/trocr-large-printed
-#   Phase A: freeze encoder (decoder + new Javanese tokens) → Phase B: unfreeze → score.
-# Hub root = latest only; tags epoch-N retained; all local ckpts kept for scoring.
+# Hands-off v5: synthetic-HQ first cook (no old 60k/180k mix).
+#   Phase A: freeze encoder → Phase B: unfreeze (2 ep) → score on HQ val.
+# Hub: thesimonharms/trocr-javanese-synthetic-v5
 set -euo pipefail
 
 cd /workspace/trocr
@@ -19,14 +19,15 @@ echo "[train] ONEAPI_DEVICE_SELECTOR=${ONEAPI_DEVICE_SELECTOR:-unset}"
 : "${HF_TOKEN:?HF_TOKEN must be set}"
 
 BASE_MODEL="${BASE_MODEL:-microsoft/trocr-large-printed}"
-HUB_MODEL_ID="${HUB_MODEL_ID:-thesimonharms/trocr-javanese-synthetic-v4}"
-# Primary original once + extras: original×5 (=×6 total), Nusa×8, 180k×1
-DATASET_NAME="${DATASET_NAME:-thesimonharms/javanese-dataset}"
-EXTRA_DATASETS="${EXTRA_DATASETS:-thesimonharms/javanese-dataset,thesimonharms/javanese-nusaaksara-ocr,thesimonharms/javanese-dataset-180k}"
-EXTRA_UPSAMPLE="${EXTRA_UPSAMPLE:-5,8,1}"
+HUB_MODEL_ID="${HUB_MODEL_ID:-thesimonharms/trocr-javanese-synthetic-v5}"
+# First synthetic-HQ cook: HQ ×1 only (do not drown with old mixes).
+DATASET_NAME="${DATASET_NAME:-thesimonharms/javanese-synthetic-hq}"
+EXTRA_DATASETS="${EXTRA_DATASETS:-}"
+EXTRA_UPSAMPLE="${EXTRA_UPSAMPLE:-1}"
+SCORE_DATASET="${SCORE_DATASET:-$DATASET_NAME}"
 
 STAGE_A_EPOCHS="${STAGE_A_EPOCHS:-2}"
-STAGE_B_EPOCHS="${STAGE_B_EPOCHS:-3}"
+STAGE_B_EPOCHS="${STAGE_B_EPOCHS:-2}"
 STAGE_A_LR="${STAGE_A_LR:-3e-5}"
 STAGE_B_LR="${STAGE_B_LR:-1e-5}"
 WARMUP_RATIO="${WARMUP_RATIO:-0.05}"
@@ -43,7 +44,6 @@ if [[ -z "${BATCH_SIZE:-}" ]]; then
   fi
 fi
 
-# Large printed often needs GC on iGPU; smoke may write best_gc.txt
 if [[ -f /workspace/output/trocr_v4_smoke/best_gc.txt ]]; then
   GRADIENT_CHECKPOINTING="$(tr -d '[:space:]' </workspace/output/trocr_v4_smoke/best_gc.txt)"
 fi
@@ -53,29 +53,28 @@ if [[ "$GRADIENT_CHECKPOINTING" == "0" ]]; then
   GC_FLAG=(--no-gradient_checkpointing)
 fi
 
-OUT_A="${OUTPUT_DIR_A:-/workspace/output/trocr_v4_stage_a}"
-OUT_B="${OUTPUT_DIR_B:-/workspace/output/trocr_v4_stage_b}"
-SCORES_CSV="${SCORES_CSV:-/workspace/output/trocr_v4_evals/scores.csv}"
+OUT_A="${OUTPUT_DIR_A:-/workspace/output/trocr_v5_stage_a}"
+OUT_B="${OUTPUT_DIR_B:-/workspace/output/trocr_v5_stage_b}"
+SCORES_CSV="${SCORES_CSV:-/workspace/output/trocr_v5_evals/scores.csv}"
 N_SCORE="${N_SCORE:-1500}"
-# SCORE_ONLY=1 skips Phase A/B and only rebuilds symlink root + scores existing ckpts.
 SCORE_ONLY="${SCORE_ONLY:-0}"
 
 mkdir -p "$OUT_A" "$OUT_B" "$(dirname "$SCORES_CSV")" /workspace/hf-cache /workspace/logs
-LOG="/workspace/logs/train_v4_$(date -u +%Y%m%dT%H%M%SZ).log"
+LOG="/workspace/logs/train_v5_$(date -u +%Y%m%dT%H%M%SZ).log"
 
 echo "[train] hub=$HUB_MODEL_ID base=$BASE_MODEL score_only=$SCORE_ONLY" | tee -a "$LOG"
-echo "[train] data=$DATASET_NAME extras=$EXTRA_DATASETS ups=$EXTRA_UPSAMPLE" | tee -a "$LOG"
+echo "[train] data=$DATASET_NAME extras=${EXTRA_DATASETS:-none} ups=$EXTRA_UPSAMPLE" | tee -a "$LOG"
+echo "[train] score_dataset=$SCORE_DATASET" | tee -a "$LOG"
 echo "[train] batch=$BATCH_SIZE A: epochs=$STAGE_A_EPOCHS lr=$STAGE_A_LR freeze_encoder" | tee -a "$LOG"
 echo "[train] B: epochs=$STAGE_B_EPOCHS lr=$STAGE_B_LR unfrozen from Stage A final" | tee -a "$LOG"
 echo "[train] gc=${GC_FLAG[*]}" | tee -a "$LOG"
 
 score_sweep() {
   echo "[train] === SCORE SWEEP (iGPU) ===" | tee -a "$LOG"
-  SCORE_ROOT="/workspace/output/trocr_v4_all_ckpts"
+  SCORE_ROOT="/workspace/output/trocr_v5_all_ckpts"
   rm -rf "$SCORE_ROOT"
   mkdir -p "$SCORE_ROOT"
   i=0
-  # Prefer epoch order: stage_a then stage_b, numeric checkpoint order, then finals.
   for d in \
     $(ls -d "$OUT_A"/checkpoint-* 2>/dev/null | sort -V) \
     $(ls -d "$OUT_B"/checkpoint-* 2>/dev/null | sort -V) \
@@ -94,7 +93,7 @@ score_sweep() {
 
   python -u score_epoch_checkpoints.py \
     --ckpt_root "$SCORE_ROOT" \
-    --dataset_name thesimonharms/javanese-dataset \
+    --dataset_name "$SCORE_DATASET" \
     --n_samples "$N_SCORE" \
     --out_csv "$SCORES_CSV" \
     --hub_model_id "$HUB_MODEL_ID" \
@@ -109,8 +108,6 @@ fi
 
 COMMON=(
   --dataset_name "$DATASET_NAME"
-  --extra_dataset_name "$EXTRA_DATASETS"
-  --extra_dataset_upsample "$EXTRA_UPSAMPLE"
   --hub_model_id "$HUB_MODEL_ID"
   --batch_size "$BATCH_SIZE"
   --warmup_ratio "$WARMUP_RATIO"
@@ -120,6 +117,9 @@ COMMON=(
   --save_total_limit 0
   "${GC_FLAG[@]}"
 )
+if [[ -n "${EXTRA_DATASETS}" ]]; then
+  COMMON+=(--extra_dataset_name "$EXTRA_DATASETS" --extra_dataset_upsample "$EXTRA_UPSAMPLE")
+fi
 
 # ----- Phase A: freeze encoder -----
 RESUME_A=()
@@ -166,4 +166,4 @@ python -u finetune_trocr.py \
 
 score_sweep
 
-echo "[train] DONE v4 — Hub root=$HUB_MODEL_ID scores=$SCORES_CSV" | tee -a "$LOG"
+echo "[train] DONE v5 — Hub root=$HUB_MODEL_ID scores=$SCORES_CSV" | tee -a "$LOG"

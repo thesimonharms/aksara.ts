@@ -169,6 +169,38 @@ def _expand_javanese_tokenizer(
         print("[WARN] Sample still multi-token — encoding may not use added chars yet")
     return int(n)
 
+
+def _patch_ved_unshifted_loss(model: VisionEncoderDecoderModel) -> None:
+    """Stop transformers 4.46+ ForCausalLMLoss from shifting labels a second time.
+
+    VisionEncoderDecoder already builds decoder_input_ids via shift_tokens_right.
+    ForCausalLMLoss then drops labels[0], so training learns to skip the first aksara
+    and free-gen never matches. Use plain CE on logits vs labels.
+    """
+    import torch.nn.functional as F
+
+    def unshifted_loss(
+        logits=None,
+        labels=None,
+        vocab_size=None,
+        num_items_in_batch=None,
+        ignore_index=-100,
+        **kwargs,
+    ):
+        if logits is None or labels is None or vocab_size is None:
+            raise ValueError("unshifted_loss requires logits, labels, vocab_size")
+        return F.cross_entropy(
+            logits.reshape(-1, int(vocab_size)).float(),
+            labels.reshape(-1),
+            ignore_index=int(ignore_index),
+        )
+
+    model.loss_function = unshifted_loss
+    print(
+        "[INFO] VED loss patched to unshifted CE (no ForCausalLMLoss double-shift)",
+        flush=True,
+    )
+
 import evaluate
 
 
@@ -218,6 +250,8 @@ class TrainConfig:
     learning_rate: float = 4e-5
     warmup_ratio: float = 0.05
     weight_decay: float = 0.01
+    lr_scheduler_type: str = "linear"
+    logging_steps: int = 50
     max_target_length: int = 64
     hub_model_id: Optional[str] = None
     push_to_hub: bool = True
@@ -252,6 +286,10 @@ class TrainConfig:
     # None = keep every epoch checkpoint on disk (needed for post-train scoring).
     save_total_limit: Optional[int] = 2
     hub_tag_epochs: bool = True  # tag Hub tip as epoch-N after each save
+    # 0 = off. Drop labels longer than this (exact-match cooks use 12).
+    max_label_chars: int = 0
+    pad_to_square: bool = True
+    eval_on_train: bool = False
 
 
 class HubEpochTagCallback(TrainerCallback):
@@ -424,25 +462,50 @@ def _image_to_rgb(img) -> Image.Image:
 class TrocrDataCollator:
     """On-the-fly processor — avoids caching ~GB of float pixel_values on disk."""
 
-    def __init__(self, processor: TrOCRProcessor, max_target_length: int):
+    def __init__(
+        self,
+        processor: TrOCRProcessor,
+        max_target_length: int,
+        *,
+        pad_square: bool = True,
+    ):
         self.processor = processor
         self.max_target_length = max_target_length
         self.pad_id = processor.tokenizer.pad_token_id
+        self.pad_square = pad_square
 
     def __call__(self, features: list) -> dict:
         images = [_image_to_rgb(f["image"]) for f in features]
+        if self.pad_square:
+            try:
+                from image_prep import pad_to_square
+            except ImportError:
+                pad_to_square = None  # type: ignore
+            if pad_to_square is not None:
+                images = [pad_to_square(im) for im in images]
         texts = [f["text"] for f in features]
-        enc = self.processor(
-            images=images,
-            text=texts,
-            padding="max_length",
-            truncation=True,
-            max_length=self.max_target_length,
-            return_tensors="pt",
-        )
-        labels = enc["labels"].clone()
+        pix = self.processor(images=images, return_tensors="pt")
+        tok = self.processor.tokenizer
+        eos_id = tok.sep_token_id
+        if eos_id is None:
+            eos_id = tok.eos_token_id
+        max_len = self.max_target_length
+        rows: list[list[int]] = []
+        for text in texts:
+            ids = tok(
+                text,
+                add_special_tokens=False,
+                truncation=True,
+                max_length=max(1, max_len - 1),
+            ).input_ids
+            if eos_id is not None:
+                ids = list(ids) + [int(eos_id)]
+            rows.append(ids[:max_len])
+        labels = torch.full((len(rows), max_len), int(self.pad_id), dtype=torch.long)
+        for i, ids in enumerate(rows):
+            labels[i, : len(ids)] = torch.tensor(ids, dtype=torch.long)
         labels[labels == self.pad_id] = -100
-        return {"pixel_values": enc["pixel_values"], "labels": labels}
+        return {"pixel_values": pix["pixel_values"], "labels": labels}
 
 
 def build_dataset(config: TrainConfig, hf_token: Optional[str]) -> DatasetDict:
@@ -559,6 +622,30 @@ def build_dataset(config: TrainConfig, hf_token: Optional[str]) -> DatasetDict:
         if drop:
             raw[split] = raw[split].remove_columns(drop)
 
+    if config.max_label_chars and int(config.max_label_chars) > 0:
+        cap = int(config.max_label_chars)
+
+        def _short_enough(ex):
+            t = (ex.get("text") or "")
+            return 0 < len(t) <= cap
+
+        for split in list(raw.keys()):
+            before = len(raw[split])
+            raw[split] = raw[split].filter(_short_enough)
+            print(
+                f"[INFO] max_label_chars≤{cap} {split}: {before} → {len(raw[split])}",
+                flush=True,
+            )
+            if len(raw[split]) == 0:
+                sys.exit(f"[ERROR] {split} empty after max_label_chars={cap} filter")
+
+    if config.eval_on_train:
+        raw["validation"] = raw["train"]
+        print(
+            f"[INFO] eval_on_train: validation is the train split ({len(raw['train'])} rows)",
+            flush=True,
+        )
+
     print("[INFO] Using on-the-fly image encode (no pixel_values map cache)")
     return raw
 
@@ -650,6 +737,7 @@ def train(config: TrainConfig) -> str:
     model.config.pad_token_id = processor.tokenizer.pad_token_id
     model.config.eos_token_id = processor.tokenizer.sep_token_id
     model.config.vocab_size = model.config.decoder.vocab_size
+    _patch_ved_unshifted_loss(model)
     # Keep generation_config in sync — Trainer may prefer it over model.config at generate().
     # A wrong decoder_start (e.g. EOS=2) yields garbage free-run CER while teacher-forced
     # train loss still looks healthy.
@@ -675,13 +763,39 @@ def train(config: TrainConfig) -> str:
 
     if config.freeze_encoder:
         _freeze_vision_encoder(model)
+    else:
+        n_enc = sum(
+            p.numel()
+            for n, p in model.named_parameters()
+            if p.requires_grad and "encoder" in n
+        )
+        n_all = sum(p.numel() for p in model.parameters() if p.requires_grad)
+        print(
+            f"[INFO] Vision encoder unfrozen (encoder trainable={n_enc:,}, all trainable={n_all:,})",
+            flush=True,
+        )
 
     raw = build_dataset(config, hf_token)
 
     if config.push_dataset and hf_token:
         push_dataset_to_hub(raw, config, hf_token)
 
-    collator = TrocrDataCollator(processor, config.max_target_length)
+    collator = TrocrDataCollator(
+        processor,
+        config.max_target_length,
+        pad_square=bool(config.pad_to_square),
+    )
+    try:
+        probe = collator([raw["train"][0]])
+        lab = probe["labels"][0].tolist()
+        shown = [x for x in lab if x != -100]
+        print(
+            f"[INFO] label probe text={raw['train'][0]['text']!r} "
+            f"ids={shown} (no bos; eos last)",
+            flush=True,
+        )
+    except Exception as exc:
+        print(f"[WARN] label probe failed: {exc}", flush=True)
 
     cer_metric = evaluate.load("cer")
 
@@ -696,6 +810,12 @@ def train(config: TrainConfig) -> str:
         return {"cer": cer_metric.compute(predictions=pred_str, references=label_str)}
 
     use_fp16, use_bf16 = use_amp()
+    print(
+        f"[INFO] amp fp16={use_fp16} bf16={use_bf16} attn={attn_impl} "
+        f"TROCR_FORCE_FP32={os.environ.get('TROCR_FORCE_FP32', '')!r} "
+        f"TROCR_ATTN={os.environ.get('TROCR_ATTN', '')!r}",
+        flush=True,
+    )
 
     hub_id = None
     hub_kwargs = {}
@@ -748,9 +868,10 @@ def train(config: TrainConfig) -> str:
         "per_device_eval_batch_size": min(config.eval_batch_size, config.batch_size),
         "learning_rate": config.learning_rate,
         "warmup_ratio": config.warmup_ratio,
+        "lr_scheduler_type": config.lr_scheduler_type,
         "weight_decay": config.weight_decay,
         "seed": config.seed,
-        "logging_steps": 50,
+        "logging_steps": max(1, int(config.logging_steps)),
         "eval_strategy": eval_strategy,
         "eval_steps": eval_steps,
         "save_strategy": "epoch",
@@ -979,6 +1100,28 @@ def parse_args() -> TrainConfig:
         help="LR warmup ratio (use 0 on resume chunks after the first).",
     )
     p.add_argument(
+        "--lr_scheduler_type",
+        default="linear",
+        help="HF scheduler name (linear, cosine, constant_with_warmup, ...).",
+    )
+    p.add_argument(
+        "--logging_steps",
+        type=int,
+        default=50,
+        help="Trainer logging interval.",
+    )
+    p.add_argument(
+        "--weight_decay",
+        type=float,
+        default=0.01,
+        help="AdamW weight decay.",
+    )
+    p.add_argument(
+        "--eval_on_train",
+        action="store_true",
+        help="Use the train split as eval (overfit / memorization checks).",
+    )
+    p.add_argument(
         "--skip_final_cer",
         action="store_true",
         help="Skip slow final generate-CER (recommended for chunked HF Jobs / NAS).",
@@ -1019,6 +1162,18 @@ def parse_args() -> TrainConfig:
         action="store_true",
         help="Do not create Hub tags epoch-N after each epoch push.",
     )
+    p.add_argument(
+        "--max_label_chars",
+        type=int,
+        default=0,
+        help="Drop examples whose label is longer than this (0=off).",
+    )
+    p.add_argument(
+        "--pad_to_square",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Pad line images to square before the ViT resize (default on).",
+    )
     a = p.parse_args()
 
     if a.dataset_dir is None and a.dataset_name is None:
@@ -1052,6 +1207,10 @@ def parse_args() -> TrainConfig:
         eval_batch_size=a.eval_batch_size,
         learning_rate=a.lr,
         warmup_ratio=max(0.0, float(a.warmup_ratio)),
+        lr_scheduler_type=str(a.lr_scheduler_type),
+        logging_steps=max(1, int(a.logging_steps)),
+        weight_decay=max(0.0, float(a.weight_decay)),
+        eval_on_train=bool(a.eval_on_train),
         max_target_length=a.max_target_length,
         hub_model_id=a.hub_model_id,
         push_to_hub=not a.no_push,
@@ -1078,6 +1237,8 @@ def parse_args() -> TrainConfig:
         freeze_encoder=bool(a.freeze_encoder),
         save_total_limit=save_limit,
         hub_tag_epochs=not bool(a.no_hub_tag_epochs),
+        max_label_chars=max(0, int(a.max_label_chars)),
+        pad_to_square=bool(a.pad_to_square),
     )
 
 

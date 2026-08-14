@@ -20,7 +20,7 @@ from device_utils import pick_device, resolve_torch_device
 from generation_utils import anti_loop_enabled, trocr_generate
 from local_verify_large import cer, edit_distance, to_rgb
 
-MODEL = os.environ.get("HUB_MODEL_ID", "thesimonharms/trocr-javanese-synthetic-v4")
+MODEL = os.environ.get("HUB_MODEL_ID", "thesimonharms/trocr-javanese-synthetic-v6")
 REV = os.environ.get("HUB_REVISION") or "main"
 N = int(os.environ.get("N_SAMPLES", "300"))
 OUT = Path(__file__).resolve().parent / f"local_verify_diagnose_{N}.json"

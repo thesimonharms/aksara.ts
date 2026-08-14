@@ -1,20 +1,47 @@
-# NAS / Docker hands-off TrOCR v4 (Intel XPU)
+# NAS / Docker hands-off TrOCR (Intel XPU)
 
-Fire-and-forget fine-tune on the NAS. **v4** starts from
-`microsoft/trocr-large-printed` (printed prior for synthetic Aksara), expands the
-Javanese tokenizer, freezes the encoder briefly, then unfreezes — Hub id
-`thesimonharms/trocr-javanese-synthetic-v4`.
+Fire-and-forget fine-tune on the NAS.
 
-Mid-train free-gen gates: on the laptop, `.\sniff_hub_epoch.ps1 -Revision epoch-N`
-(DirectML). Do not steal the NAS XPU for long verifies while training.
+| Cook | Hub model | Data | Status |
+|------|-----------|------|--------|
+| **v6** | [`trocr-javanese-synthetic-v6`](https://huggingface.co/thesimonharms/trocr-javanese-synthetic-v6) | `javanese-synthetic-exact` (≤12 aksara, 384×384) | **Current — 96.0% exact** |
+| v5 | never published | `javanese-synthetic-hq` | Stopped (same failure mode) |
+| v4–v1 | deleted from Hub | mixed / long wiki lines | Superseded |
+
+v6 starts from `microsoft/trocr-small-printed` (not large). Capacity was not
+the bottleneck; decoder start / anti-loop / unshifted CE / square canvases
+were. Small trains fast enough for many epochs in one NAS run. Target:
+**exact-match rate**, not CER. Findings and limitations are on the Hub card.
 
 **Free-gen scoring:** `local_verify_large.py` / `score_epoch_checkpoints.py` attach
 `generation_utils.NoRunawayMarksLogitsProcessor` at inference time (blocks cecak /
 sandhangan runaway loops). Teacher-forced `eval_loss` mid-train is unchanged.
 `no_repeat_ngram_size` stays `0` in saved `generation_config` (byte-BPE footgun).
 Set `ANTI_LOOP=0` to reproduce unguarded generate().
+## Recipe (v6 — current)
 
-## Recipe (v4)
+| Choice | Value | Why |
+|--------|--------|-----|
+| Base | `microsoft/trocr-small-printed` | Printed prior; ~9× smaller than large → more epochs |
+| Data | `javanese-synthetic-exact` | ≤12 aksara, 384×384, no manuscript bg, aksara-only labels |
+| Phase 0 | overfit 32, 400 ep, **discard** | Fail fast if tokenizer/generate/pad/loss is still broken |
+| Phase A | 3 ep, **unfrozen**, LR `5e-5` | Frozen DeiT-small collapsed; must adapt encoder |
+| Phase B | **12 ep**, unfrozen, LR `2e-5` | From A final; no tokenizer re-expand |
+| Score | exact-match on exact-val | Gate is 90% exact, not 10% CER |
+| Device | **NAS iGPU XPU only** | Do not train on the laptop |
+
+## Recipe (v5 — reference, do not rerun)
+
+| Choice | Value | Why |
+|--------|--------|-----|
+| Base | `microsoft/trocr-large-printed` | Printed prior matches synthetic lines |
+| Data | `javanese-synthetic-hq` ×1 | Held-out text, length mix, degrade — no old mix drown |
+| Phase A | 2 ep, freeze encoder, LR `3e-5` | New tokens need decoder learning first |
+| Phase B | **2 ep**, unfreeze, LR `1e-5` | v4 ep3 free-gen was flat; stop earlier |
+| Score | HQ validation (anti-loop) | In-domain gate for synthetic capability |
+| Device | **NAS iGPU XPU only** | Do not train on the laptop |
+
+## Recipe (v4 — reference)
 
 | Choice | Value | Why |
 |--------|--------|-----|
@@ -66,32 +93,32 @@ cd /path/to/aksara.ts/training/trocr/nas
 export HF_TOKEN=hf_xxx
 export RENDER_GID="$(stat -c %g /dev/dri/renderD128)"
 
-# Optional overrides:
-# export EPOCHS=20 LR=5e-6 TROCR_BATCH_SIZE=24
+# v6 (short clean exact-match) — preferred
+docker compose up -d trocr-train-v6
+docker compose logs -f trocr-train-v6
 
-docker compose up -d trocr-train
-docker compose logs -f trocr-train
+# v4 (legacy mix) — only if intentionally re-running
+# docker compose up -d trocr-train
 ```
 
 - Detach anytime; container keeps training.
-- If the box reboots, `docker compose up -d` again — script **resumes** from
-  `checkpoint-*` under the `trocr_output` volume.
-- Done when logs show `[train] DONE` and Hub `…-synthetic-v2` has a fresh
-  “End of training” commit.
+- Fresh `trocr_v5_stage_{a,b}` dirs — no accidental Phase A resume from v4.
+- `restart: "no"` — finished/score exit does not re-enter train.
+- Score-only: `docker compose run --rm trocr-train-v6` with `SCORE_ONLY=1`
+- Done when logs show `[train] DONE v6` and Hub `…-synthetic-v6` has `evals/scores.csv`.
 
-Watch Hub: https://huggingface.co/thesimonharms/trocr-javanese-synthetic-v2
+Watch Hub: https://huggingface.co/thesimonharms/trocr-javanese-synthetic-v6
 
 ## Verify after it finishes (on NAS or laptop)
 
 ```bash
-# In-domain + original scoreboard
-HUB_MODEL_ID=thesimonharms/trocr-javanese-synthetic-v2 \
-DATASET_NAME=thesimonharms/javanese-dataset \
+# v6 in-domain (synthetic-exact val)
+HUB_MODEL_ID=thesimonharms/trocr-javanese-synthetic-v6 \
+DATASET_NAME=thesimonharms/javanese-synthetic-exact \
 N_SAMPLES=1500 python local_verify_large.py
 ```
 
-Gate: original-val CER should beat **v1 ~0.63** (and 180k-val beat **v1 ~0.61**).
-If not, do **not** keep training the same recipe — change data/LR, don’t burn epochs.
+Gate (v6): exact-match on exact-val should stay ≥ **90%** (the published B-final is **96.0%**). If a recook misses that, change data/geometry/loss — do not switch to `trocr-large`.
 
 ## Troubleshooting
 
@@ -111,6 +138,10 @@ nas/
   docker-compose.yml      # DRI passthrough + volumes
   entrypoint.sh           # detect | train | smoke
   detect_gpu.sh           # list XPUs, prefer discrete
-  train_v2_handsoff.sh    # single command train → Hub v2
+  train_v2_handsoff.sh
+  train_v3_handsoff.sh
+  train_v4_handsoff.sh
+  train_v5_handsoff.sh    # HQ-only cook (stopped)
+  train_v6_handsoff.sh    # exact-match cook (current)
   README.md               # this file
 ```

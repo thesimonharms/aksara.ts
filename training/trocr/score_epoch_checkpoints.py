@@ -25,6 +25,7 @@ from transformers import TrOCRProcessor, VisionEncoderDecoderModel
 
 from device_utils import attn_implementation, pick_device
 from generation_utils import anti_loop_enabled, trocr_generate
+from image_prep import pad_to_square
 from local_verify_large import CLOSE_MAX, edit_distance, to_rgb
 
 
@@ -56,7 +57,7 @@ def score_checkpoint(
     with torch.inference_mode():
         for i in range(n):
             ex = ds[i]
-            image = to_rgb(ex["image"])
+            image = pad_to_square(to_rgb(ex["image"]))
             ref = (ex.get("text") or ex.get("label") or "").strip()
             pv = processor(images=image, return_tensors="pt").pixel_values.to(device)
             ids = trocr_generate(
@@ -123,10 +124,18 @@ def main() -> None:
     device = pick_device()
     print(f"[INFO] device={device} ckpt_root={args.ckpt_root}", flush=True)
 
-    ckpts = sorted(args.ckpt_root.glob("checkpoint-*"), key=lambda p: p.stat().st_mtime)
-    final = args.ckpt_root / "final"
-    if final.is_dir():
-        ckpts.append(final)
+    # Accept Trainer layout (checkpoint-*, final/) and train_v4 score-sweep
+    # symlinks (01-trocr_v4_stage_a-checkpoint-N, 06-…-final).
+    ckpts: list[Path] = []
+    for p in sorted(args.ckpt_root.iterdir(), key=lambda x: x.name):
+        if not p.is_dir():
+            continue
+        name = p.name
+        if name.startswith("checkpoint-") or name == "final":
+            ckpts.append(p)
+        elif "checkpoint-" in name or name.endswith("-final"):
+            ckpts.append(p)
+    ckpts.sort(key=lambda p: p.stat().st_mtime)
     if not ckpts:
         raise SystemExit(f"No checkpoints under {args.ckpt_root}")
 

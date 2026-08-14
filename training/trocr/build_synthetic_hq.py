@@ -77,6 +77,7 @@ def _write_plan(corpus_jsonl: Path, count: int, seed: int, plan_path: Path) -> N
     rows = load_corpus_jsonl(corpus_jsonl)
     if not rows:
         raise SystemExit(f"[ERROR] empty corpus metadata: {corpus_jsonl}")
+    t0 = time.time()
     sampler = StratifiedCorpus(rows, rng=random.Random(seed))
     specs = sampler.plan(count, seed=seed)
     plan_path.parent.mkdir(parents=True, exist_ok=True)
@@ -96,13 +97,28 @@ def _write_plan(corpus_jsonl: Path, count: int, seed: int, plan_path: Path) -> N
                 )
                 + "\n"
             )
-    print(f"[OK] wrote plan {plan_path} ({count} samples)", flush=True)
+    print(
+        f"[OK] wrote plan {plan_path} ({count} samples) in {time.time() - t0:.1f}s",
+        flush=True,
+    )
 
 
 def _existing_complete(split_dir: Path, count: int) -> set[int]:
+    """Return indices that already have png+txt.
+
+    Fast path: if first/last samples exist and png count matches, assume contiguous
+    complete (avoids 500k× exists() on Windows NTFS). Slow path fills holes.
+    """
+    if not split_dir.exists() or count <= 0:
+        return set()
+    first = split_dir / "sample_0000000.png"
+    last = split_dir / f"sample_{count - 1:07d}.png"
+    if first.exists() and last.exists():
+        # Cheap completeness signal — glob is still heavy at 500k, so sample a few middles.
+        mids = (count // 4, count // 2, (3 * count) // 4)
+        if all((split_dir / f"sample_{i:07d}.png").exists() for i in mids):
+            return set(range(count))
     done: set[int] = set()
-    if not split_dir.exists():
-        return done
     for i in range(count):
         stem = split_dir / f"sample_{i:07d}"
         if stem.with_suffix(".png").exists() and stem.with_suffix(".txt").exists():
@@ -110,26 +126,64 @@ def _existing_complete(split_dir: Path, count: int) -> set[int]:
     return done
 
 
-def _write_metadata(split_dir: Path, count: int, manifest_path: Path) -> None:
+def _write_metadata(
+    split_dir: Path,
+    count: int,
+    manifest_path: Path,
+    *,
+    plan_path: Path | None = None,
+) -> None:
+    """Write imagefolder metadata.jsonl + provenance manifest.
+
+    Prefer the stratified plan for labels (one sequential read) instead of opening
+    500k .txt/.meta.json files on NTFS.
+    """
     meta_path = split_dir / "metadata.jsonl"
+    plan_by_idx: dict[int, dict] | None = None
+    if plan_path and plan_path.is_file():
+        plan_by_idx = {}
+        with plan_path.open(encoding="utf-8") as f:
+            for line in f:
+                row = json.loads(line)
+                plan_by_idx[int(row["idx"])] = row
+        print(f"[INFO] metadata from plan {plan_path.name}", flush=True)
+
+    t0 = time.time()
     with meta_path.open("w", encoding="utf-8") as mf, manifest_path.open(
         "w", encoding="utf-8"
     ) as man:
         for idx in range(count):
             stem = f"sample_{idx:07d}"
-            text = (split_dir / f"{stem}.txt").read_text(encoding="utf-8")
+            if plan_by_idx is not None:
+                row = plan_by_idx[idx]
+                text = row["text"]
+                # Plan fields only — skip per-sample .meta.json (500k NTFS opens).
+                extra = {
+                    "text_id": row.get("text_id", ""),
+                    "bucket": row.get("bucket", ""),
+                    "rare": bool(row.get("rare")),
+                    "aug_seed": int(row.get("aug_seed", 0)),
+                }
+            else:
+                text = (split_dir / f"{stem}.txt").read_text(encoding="utf-8")
+                extra = {}
+                side = split_dir / f"{stem}.meta.json"
+                if side.exists():
+                    extra = json.loads(side.read_text(encoding="utf-8"))
             mf.write(
                 json.dumps({"file_name": f"{stem}.png", "text": text}, ensure_ascii=False)
                 + "\n"
             )
-            side = split_dir / f"{stem}.meta.json"
-            extra = {}
-            if side.exists():
-                extra = json.loads(side.read_text(encoding="utf-8"))
             man.write(
                 json.dumps({"idx": idx, "file_name": f"{stem}.png", **extra}, ensure_ascii=False)
                 + "\n"
             )
+            if idx and idx % 50_000 == 0:
+                print(f"  [metadata] {idx}/{count}", flush=True)
+    print(
+        f"[OK] metadata {meta_path.name} + {manifest_path.name} in {time.time() - t0:.1f}s",
+        flush=True,
+    )
 
 
 def generate_split(
@@ -152,7 +206,9 @@ def generate_split(
         flush=True,
     )
     if not todo:
-        _write_metadata(split_dir, count, split_dir / "manifest.jsonl")
+        _write_metadata(
+            split_dir, count, split_dir / "manifest.jsonl", plan_path=plan_path
+        )
         return
 
     t0 = time.time()
@@ -184,7 +240,9 @@ def generate_split(
                         flush=True,
                     )
 
-    _write_metadata(split_dir, count, split_dir / "manifest.jsonl")
+    _write_metadata(
+        split_dir, count, split_dir / "manifest.jsonl", plan_path=plan_path
+    )
     print(f"[OK] {split_dir.name} in {(time.time()-t0)/60:.1f} min", flush=True)
 
 

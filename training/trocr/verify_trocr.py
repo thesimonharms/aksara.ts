@@ -48,12 +48,10 @@ from transformers import TrOCRProcessor, VisionEncoderDecoderModel
 from device_utils import attn_implementation, pick_device
 from generation_utils import anti_loop_enabled, trocr_generate
 
-MODEL_ID = os.environ.get("HUB_MODEL_ID", "thesimonharms/trocr-javanese-synthetic")
-# Repo root holds the expanded-tokenizer checkpoint (vocab ~50361).
-# Trainer also pushes under final/ — that copy is still the old 50265 vocab.
-# Set HUB_MODEL_SUBFOLDER=final only when you intentionally want that older tree.
+MODEL_ID = os.environ.get("HUB_MODEL_ID", "thesimonharms/trocr-javanese-synthetic-v6")
+# Load from repo root (expanded Javanese tokenizer, vocab 64098).
 MODEL_SUBFOLDER = os.environ.get("HUB_MODEL_SUBFOLDER", "").strip()
-DATASET_ID = os.environ.get("DATASET_NAME", "thesimonharms/javanese-dataset")
+DATASET_ID = os.environ.get("DATASET_NAME", "thesimonharms/javanese-synthetic-exact")
 N = int(os.environ.get("N_SAMPLES", "24"))
 # "both" | "baseline" | "tweak"
 MODE = os.environ.get("VERIFY_MODE", "both").strip().lower()

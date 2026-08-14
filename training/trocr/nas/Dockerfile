@@ -16,6 +16,7 @@ RUN python -m pip install --no-cache-dir -U pip \
       "sentencepiece>=0.2.0" \
       "python-dotenv>=1.0" \
       "pillow>=10.0" \
+      "protobuf>=4.25" \
       "huggingface_hub[hf_xet]>=0.24" \
       "transformers-xpu-helper[transformers] @ git+https://github.com/thesimonharms/transformers-xpu-helper.git"
 
@@ -27,12 +28,14 @@ ENV PYTHONUNBUFFERED=1 \
     HUGGINGFACE_HUB_CACHE=/workspace/hf-cache
 
 COPY entrypoint.sh detect_gpu.sh train_v2_handsoff.sh train_v3_handsoff.sh \
-     train_v4_handsoff.sh smoke_v4_batch.sh /usr/local/bin/
+     train_v4_handsoff.sh train_v5_handsoff.sh train_v6_handsoff.sh smoke_v4_batch.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/entrypoint.sh \
               /usr/local/bin/detect_gpu.sh \
               /usr/local/bin/train_v2_handsoff.sh \
               /usr/local/bin/train_v3_handsoff.sh \
               /usr/local/bin/train_v4_handsoff.sh \
+              /usr/local/bin/train_v5_handsoff.sh \
+              /usr/local/bin/train_v6_handsoff.sh \
               /usr/local/bin/smoke_v4_batch.sh
 
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]

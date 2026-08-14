@@ -6,10 +6,11 @@ This directory contains the training pipeline for `aksara.ts`, including:
 - **Word segmenter** — BiLSTM model exported to ONNX (`train.py`, `export.py`)
 - **CRNN + CTC OCR** — the legacy self-supervised pseudo-labelling loop (`crnn/`)
 
-See [`trocr/README.md`](./trocr/README.md) for the current recommended OCR
-training path (HuggingFace `Seq2SeqTrainer` on `microsoft/trocr-base-handwritten`,
-run on a HF Space T4 GPU). The CRNN pipeline below is kept for reference and
-still works via `training.sh` / `training.ps1`.
+See [`trocr/README.md`](./trocr/README.md) for the current OCR training path
+(fine-tune `microsoft/trocr-small-printed` → Hub
+[`thesimonharms/trocr-javanese-synthetic-v6`](https://huggingface.co/thesimonharms/trocr-javanese-synthetic-v6)).
+The CRNN pipeline below is kept for the TypeScript ONNX runtime and still
+works via `training.sh` / `training.ps1`.
 
 ---
 

@@ -1,5 +1,9 @@
 # Javanese OCR Model Card (`javanese_ocr.onnx`)
 
+This is the **CRNN + CTC** model shipped with the TypeScript package. For the
+current research **TrOCR** line-OCR model (96% exact on short synthetic print),
+see [`thesimonharms/trocr-javanese-synthetic-v6`](https://huggingface.co/thesimonharms/trocr-javanese-synthetic-v6).
+
 ## Overview
 
 - **Architecture**: CRNN (6-layer Convolutional Neural Network backbone + Sinusoidal Positional Encoding + 2-layer Transformer Encoder + CTC Linear Projection).

@@ -290,20 +290,21 @@ Training data sourced from OPUS:
 > J. Tiedemann, 2012, *Parallel Data, Tools and Interfaces in OPUS*. In Proceedings of the 8th International Conference on Language Resources and Evaluation (LREC 2012).
 
 
-### TrOCR Fine-tuning (Javanese Aksara OCR)
+### TrOCR (Javanese Aksara line OCR)
 
-The current recommended OCR training path fine-tunes `microsoft/trocr-base-handwritten`
-via HuggingFace `Seq2SeqTrainer` (AutoTrain Advanced is deprecated and never
-supported VisionEncoderDecoder tasks). Training runs on a rented HF Space T4
-GPU (~$0.40/run on a $10 credit budget).
+The current research OCR model is
+[`thesimonharms/trocr-javanese-synthetic-v6`](https://huggingface.co/thesimonharms/trocr-javanese-synthetic-v6),
+a fine-tune of `microsoft/trocr-small-printed`. On 1,500 held-out **short
+synthetic printed** lines it reaches **96.0% exact match** (CER 0.68%).
 
-**Pipeline:** synthetic dataset generation from fonts + PDFs → optional
-human-in-the-loop labeling of real manuscript strips → fine-tune → push to
-HF Hub.
+It is a **line recognizer**, not a page or manuscript model. Each input must
+be a single cropped line, padded to a square before TrOCR’s 384×384 ViT
+resize. Longer lines, unseen fonts, transparent PNGs, and full pages are out
+of domain — the [model card](https://huggingface.co/thesimonharms/trocr-javanese-synthetic-v6)
+records those limits and the v1–v6 findings.
 
-See **[training/trocr/README.md](./training/trocr/README.md)** for the
-complete guide, including the HITL labeler (`label_pdfs.py`) and HF Space
-Docker config (`training/trocr/space/`).
+The npm package still ships the older CRNN ONNX (`model/javanese_ocr.onnx`)
+for the TypeScript runtime. Training code: **[training/trocr/README.md](./training/trocr/README.md)**.
 
 ## Development
 
@@ -319,7 +320,7 @@ The full, phased implementation plan lives in **[ROADMAP.md](./ROADMAP.md)** —
 
 **Shipped:** bidirectional Latin ↔ Aksara transliteration, Murda consonants, neural word segmenter with ONNX export, 90-test suite, npm packaging, TypeScript OCR runtime, CharNgramLM, E2E demo.
 
-**Shipped (Phase 2 — OCR accuracy):** TrOCR fine-tune pipeline (`training/trocr/`) with synthetic dataset generator (multi-font + multi-PDF), HITL manuscript labeler (`label_pdfs.py`), `Seq2SeqTrainer` fine-tuning script, and HF Space Docker config for T4 GPU training. CRNN pipeline retained in `training/crnn/`.
+**Shipped (Phase 2 — OCR accuracy):** TrOCR v6 line OCR on Hub (`trocr-javanese-synthetic-v6`, 96% exact on short synthetic print), training pipeline in `training/trocr/` (synthetic-exact renderer, pad-to-square, NAS Docker). CRNN pipeline retained in `training/crnn/` for the npm ONNX runtime.
 
 **Next up:** structured token output, Unicode normalisation, prose-trained segmenter, LM-assisted `ꦲ` disambiguation, CI, browser build.
 

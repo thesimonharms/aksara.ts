@@ -48,9 +48,14 @@ def anti_loop_enabled() -> bool:
 
 
 def estimate_char_budget(image: Image.Image) -> int:
-    """Rough aksara count from line-image aspect ratio (synthetic renders)."""
-    w, h = image.size
-    return max(1, int(round(w / max(h * 0.6, 1.0))))
+    """Aksara count from ink bbox (square-padded 384 canvases look ~1:1 overall)."""
+    try:
+        from image_prep import estimate_char_budget as _ink_budget
+
+        return _ink_budget(image)
+    except Exception:
+        w, h = image.size
+        return max(1, int(round(w / max(h * 0.6, 1.0))))
 
 
 def width_adaptive_max_new_tokens(
@@ -61,6 +66,11 @@ def width_adaptive_max_new_tokens(
 ) -> int:
     if image is None:
         return hard_cap
+    w, h = image.size
+    # Square 384×384 canvases make ink aspect look "tall" (sandhangan), so the
+    # line-width heuristic under-counts and truncates free-gen (v6 exact-match).
+    if h > 0 and min(w, h) / max(w, h) >= 0.9:
+        return int(hard_cap)
     chars = estimate_char_budget(image)
     return int(min(hard_cap, max(4, chars * tokens_per_char + 2)))
 
@@ -146,6 +156,9 @@ def trocr_generate(
     """
     use_anti = anti_loop_enabled() if anti_loop is None else bool(anti_loop)
     cls_id = processor.tokenizer.cls_token_id
+    eos_id = processor.tokenizer.sep_token_id
+    if eos_id is None:
+        eos_id = processor.tokenizer.eos_token_id
     if max_new_tokens is None:
         max_new_tokens = width_adaptive_max_new_tokens(image)
 
@@ -154,6 +167,8 @@ def trocr_generate(
         "num_beams": int(num_beams),
         "do_sample": False,
         "decoder_start_token_id": cls_id,
+        "eos_token_id": eos_id,
+        "pad_token_id": processor.tokenizer.pad_token_id,
         "no_repeat_ngram_size": 0,
         "use_cache": True,
     }

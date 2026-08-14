@@ -11,7 +11,6 @@ out/
 *.d.ts
 
 # ── IDE ────────────────────────────────────────────────────────────────────────
-.vscode/
 .idea/
 *.sublime-project
 *.sublime-workspace
@@ -51,7 +50,10 @@ training/trocr/trocr_dataset/
 training/trocr/trocr_dataset_1m/
 training/trocr/trocr_dataset_hq/
 training/trocr/trocr_dataset_hq_smoke/
+training/trocr/trocr_dataset_exact/
+training/trocr/trocr_dataset_exact_smoke/
 training/trocr/hub_export_javanese_synthetic_hq/
+training/trocr/hub_export_javanese_synthetic_exact/
 training/corpus_hq/
 PRIVATE_ROADMAP.md
 training/trocr/trocr_ckpt/
@@ -106,3 +108,7 @@ training/fonts/*
 *.woff
 *.woff2
 training/trocr/.venv-dml/
+branch_structure.json
+temp_auto_push.bat
+temp_interactive_push.bat
+.gitignore

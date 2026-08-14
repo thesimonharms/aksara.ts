@@ -20,13 +20,16 @@ from transformers import TrOCRProcessor, VisionEncoderDecoderModel
 
 from device_utils import attn_implementation, pick_device, resolve_torch_device
 from generation_utils import anti_loop_enabled, trocr_generate
+from image_prep import pad_to_square
 
-MODEL_ID = os.environ.get("HUB_MODEL_ID", "thesimonharms/trocr-javanese-synthetic-v2")
+MODEL_ID = os.environ.get("HUB_MODEL_ID", "thesimonharms/trocr-javanese-synthetic-v6")
 MODEL_REVISION = os.environ.get("HUB_REVISION") or None
-DATASET_ID = os.environ.get("DATASET_NAME", "thesimonharms/javanese-dataset")
+DATASET_ID = os.environ.get("DATASET_NAME", "thesimonharms/javanese-synthetic-exact")
 SPLIT = os.environ.get("VERIFY_SPLIT", "validation")
 N = int(os.environ.get("N_SAMPLES", "1500"))
 LOG_EVERY = int(os.environ.get("LOG_EVERY", "50"))
+VERIFY_SUBSET = int(os.environ.get("VERIFY_SUBSET", "0"))
+VERIFY_SEED = int(os.environ.get("VERIFY_SEED", "42"))
 
 
 # Near-match = Levenshtein edit distance <= CLOSE_MAX (default 2).
@@ -129,6 +132,14 @@ def main() -> None:
     ds = load_dataset(DATASET_ID, split=SPLIT, token=token)
     if "image" in ds.column_names:
         ds = ds.cast_column("image", HFImage())
+    if VERIFY_SUBSET > 0:
+        take = min(VERIFY_SUBSET, len(ds))
+        ds = ds.shuffle(seed=VERIFY_SEED).select(range(take))
+        print(
+            f"[INFO] verify subset shuffle seed={VERIFY_SEED} n={take} "
+            f"(must match finetune --max_train_samples)",
+            flush=True,
+        )
     n = min(N, len(ds))
     print(f"[INFO] Scoring {n} / {len(ds)} {SPLIT} examples", flush=True)
 
@@ -145,7 +156,7 @@ def main() -> None:
     with _ctx():
         for i in range(n):
             ex = ds[i]
-            image = to_rgb(ex["image"])
+            image = pad_to_square(to_rgb(ex["image"]))
             ref = (ex.get("text") or ex.get("label") or "").strip()
             pv = processor(images=image, return_tensors="pt").pixel_values.to(device)
             if device_kind == "dml":
@@ -224,7 +235,14 @@ def main() -> None:
             flush=True,
         )
     print(f"[OK] wall={time.time()-t0:.1f}s", flush=True)
-    if mean > 0.5:
+    gate = os.environ.get("EXACT_GATE", "").strip()
+    if gate:
+        need = float(gate)
+        rate = exact / max(1, n)
+        print(f"[INFO] exact-match gate={need:.2%} got={rate:.2%}", flush=True)
+        if rate < need:
+            sys.exit(3)
+    elif mean > 0.5:
         sys.exit(2)
 
 

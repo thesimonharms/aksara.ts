@@ -1,5 +1,9 @@
 # TrOCR on Hugging Face Jobs
 
+> **Current model is v6**, trained on the NAS, not Jobs:
+> [`thesimonharms/trocr-javanese-synthetic-v6`](https://huggingface.co/thesimonharms/trocr-javanese-synthetic-v6).
+> Recipes below are historical (v1/v2/smoke). Do not publish over v6.
+
 Production fine-tunes run as **HF Jobs**, not Spaces. Jobs survive laptop sleep,
 keep full logs on the [Jobs page](https://huggingface.co/jobs), and hard-stop via
 `--timeout` so a hung run cannot burn hours of credits.
@@ -7,7 +11,7 @@ keep full logs on the [Jobs page](https://huggingface.co/jobs), and hard-stop vi
 | Path | Use for |
 |------|---------|
 | **Local Intel Arc (XPU)** | Inference + local fine-tunes on Arc Pro B60 eGPU |
-| **NAS Docker (Linux XPU)** | **Hands-off v2 retrain** — see [`nas/README.md`](nas/README.md) |
+| **NAS Docker (Linux XPU)** | **Hands-off v6 cook** — see [`nas/README.md`](nas/README.md) |
 | **HF Jobs** (this doc) | Cloud GPU fine-tunes when local GPU is busy / unavailable |
 
 ## Local Intel Arc (Windows XPU)
@@ -34,7 +38,7 @@ Smoke that the B60 is visible:
 
 ```powershell
 cd training\trocr
-$env:HUB_MODEL_ID = "thesimonharms/trocr-javanese-synthetic-v2"
+$env:HUB_MODEL_ID = "thesimonharms/trocr-javanese-synthetic-v6"
 $env:N_SAMPLES = "1500"
 .\.venv-xpu\Scripts\python.exe local_verify_large.py
 # or quick Hub smoke:

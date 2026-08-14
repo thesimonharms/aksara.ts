@@ -49,9 +49,9 @@ def main() -> None:
     if args.attn != "default":
         load_kw["attn_implementation"] = args.attn
 
-    proc = TrOCRProcessor.from_pretrained("thesimonharms/trocr-javanese-synthetic-v2", token=token)
+    proc = TrOCRProcessor.from_pretrained("thesimonharms/trocr-javanese-synthetic-v6", token=token)
     model = VisionEncoderDecoderModel.from_pretrained(
-        "thesimonharms/trocr-javanese-synthetic-v2", **load_kw
+        "thesimonharms/trocr-javanese-synthetic-v6", **load_kw
     )
     model.to(args.device)
     model.train()

@@ -1,17 +1,27 @@
-# Hands-off TrOCR v4 (large-printed freeze→unfreeze→score) on NAS Intel XPU.
+# Hands-off TrOCR on NAS Intel XPU.
+# v4 = original/Nusa/180k mix; v5 = synthetic-HQ; v6 = short clean exact-match.
+x-trocr-common: &trocr-common
+  build: .
+  image: aksara-trocr-xpu:latest
+  devices:
+    - /dev/dri:/dev/dri
+  group_add:
+    - "${RENDER_GID:-105}"
+  ipc: host
+  shm_size: "16gb"
+  env_file:
+    - .env
+  volumes:
+    - /volume1/docker/aksara-trocr/trocr:/workspace/trocr:ro
+    - /volume1/docker/aksara-trocr/output:/workspace/output
+    - /volume1/docker/aksara-trocr/hf-cache:/workspace/hf-cache
+    - /volume1/docker/aksara-trocr/logs:/workspace/logs
+  restart: "no"
+
 services:
   trocr-train:
-    build: .
-    image: aksara-trocr-xpu:latest
+    <<: *trocr-common
     container_name: aksara-trocr-v4
-    devices:
-      - /dev/dri:/dev/dri
-    group_add:
-      - "${RENDER_GID:-105}"
-    ipc: host
-    shm_size: "16gb"
-    env_file:
-      - .env
     environment:
       HF_TOKEN: ${HF_TOKEN}
       HF_USERNAME: ${HF_USERNAME:-thesimonharms}
@@ -27,10 +37,52 @@ services:
       TROCR_BATCH_SIZE: ${TROCR_BATCH_SIZE:-8}
       GRADIENT_CHECKPOINTING: ${GRADIENT_CHECKPOINTING:-1}
       N_SCORE: ${N_SCORE:-1500}
-    volumes:
-      - /volume1/docker/aksara-trocr/trocr:/workspace/trocr:ro
-      - /volume1/docker/aksara-trocr/output:/workspace/output
-      - /volume1/docker/aksara-trocr/hf-cache:/workspace/hf-cache
-      - /volume1/docker/aksara-trocr/logs:/workspace/logs
-    restart: on-failure
     command: ["train-v4"]
+
+  trocr-train-v5:
+    <<: *trocr-common
+    container_name: aksara-trocr-v5
+    environment:
+      HF_TOKEN: ${HF_TOKEN}
+      HF_USERNAME: ${HF_USERNAME:-thesimonharms}
+      BASE_MODEL: ${BASE_MODEL:-microsoft/trocr-large-printed}
+      HUB_MODEL_ID: ${HUB_MODEL_ID:-thesimonharms/trocr-javanese-synthetic-v5}
+      DATASET_NAME: ${DATASET_NAME:-thesimonharms/javanese-synthetic-hq}
+      EXTRA_DATASETS: ${EXTRA_DATASETS:-}
+      EXTRA_UPSAMPLE: ${EXTRA_UPSAMPLE:-1}
+      SCORE_DATASET: ${SCORE_DATASET:-thesimonharms/javanese-synthetic-hq}
+      STAGE_A_EPOCHS: ${STAGE_A_EPOCHS:-2}
+      STAGE_B_EPOCHS: ${STAGE_B_EPOCHS:-2}
+      STAGE_A_LR: ${STAGE_A_LR:-3e-5}
+      STAGE_B_LR: ${STAGE_B_LR:-1e-5}
+      TROCR_BATCH_SIZE: ${TROCR_BATCH_SIZE:-8}
+      GRADIENT_CHECKPOINTING: ${GRADIENT_CHECKPOINTING:-1}
+      N_SCORE: ${N_SCORE:-1500}
+    command: ["train-v5"]
+
+  trocr-train-v6:
+    <<: *trocr-common
+    container_name: aksara-trocr-v6
+    environment:
+      HF_TOKEN: ${HF_TOKEN}
+      HF_USERNAME: ${HF_USERNAME:-thesimonharms}
+      # Literals on purpose: nas/.env still has v4 BASE_MODEL/HUB/DATA and
+      # Compose interpolates ${BASE_MODEL:-...} from that file.
+      BASE_MODEL: microsoft/trocr-small-printed
+      HUB_MODEL_ID: thesimonharms/trocr-javanese-synthetic-v6
+      DATASET_NAME: thesimonharms/javanese-synthetic-exact
+      EXTRA_DATASETS: ""
+      EXTRA_UPSAMPLE: "1"
+      SCORE_DATASET: thesimonharms/javanese-synthetic-exact
+      STAGE_A_EPOCHS: "3"
+      STAGE_B_EPOCHS: "12"
+      STAGE_A_LR: "5e-5"
+      STAGE_B_LR: "2e-5"
+      TROCR_BATCH_SIZE: "16"
+      GRADIENT_CHECKPOINTING: "0"
+      TROCR_FORCE_FP32: "1"
+      TROCR_ATTN: eager
+      STAGE_0_EPOCHS: "400"
+      STAGE_0_SAMPLES: "32"
+      N_SCORE: "1500"
+    command: ["train-v6"]

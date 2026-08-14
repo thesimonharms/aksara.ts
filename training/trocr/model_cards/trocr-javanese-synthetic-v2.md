@@ -1,4 +1,5 @@
 ---
+# SUPERSEDED — Hub repo deleted. Current model: thesimonharms/trocr-javanese-synthetic-v6
 language:
 - jv
 license: mit
